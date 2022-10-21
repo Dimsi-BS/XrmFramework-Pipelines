@@ -1,0 +1,292 @@
+# Copyright DIMSI
+
+parameters:
+  - name: SolutionFile
+    displayName: Path to the solution file
+    type: string
+    default:
+
+  - name: PowerPlatformSPN
+    displayName: Service connection to PowerPlatform
+    type: string
+    
+  - name: solutions
+    displayName: List of solutions
+    type: object
+
+  - name: solutionsImportOrder
+    displayName: Solutions import order
+    type: object
+
+  - name: plugins
+    type: object 
+    default: []
+
+  - name: webResources
+    displayName: List of Webresources projects
+    type: object
+    default: []
+  
+  - name: extractSolutions
+    displayName: Do we need to extract solutions to the repository
+    type: boolean
+    default: true
+
+  - name: variableGroup
+    displayName: Name of the common variable group
+    type: string
+
+  - name: installNbgvTool
+    displayName: Install NBGV tool to the agent
+    type: boolean
+    default: false
+  
+  - name: environments
+    displayName: List of environments
+    type: object
+    default: 
+      - name: UAT
+        variableGroup: GoupUAT
+        PowerPlatformSPN:
+        pool:
+        setAdminModeOnDeploy: true
+  
+  - name: azureFunctions
+    displayName: List of Azure Functions
+    type: object
+    default: []
+
+variables:
+  - group: '${{ parameters.variableGroup }}'
+  - name: BRANCH_NAME
+    value: $[replace(variables['Build.SourceBranch'], 'refs/heads/', '')]
+  - name: buildPlatform
+    value: 'Any CPU'
+  - name: buildConfiguration
+    value: 'Release'
+
+stages:
+  - stage: Preparation
+    displayName: Build and extract
+    jobs:
+      - job: BuildProjects
+        steps :
+
+          - checkout: self
+            persistCredentials: true
+            fetchDepth: 0
+            clean: true
+
+          - task: XrmFrameworkConnectionStringsCreation@1
+            inputs:
+              authenticationType: 'PowerPlatformSPN'
+              PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+
+          - task: NuGetToolInstaller@1
+            displayName: Install NuGet Tool
+            inputs:
+              versionSpec: '>= 5.0.0'
+
+          - task: NuGetCommand@2
+            displayName: Restoring NuGet packages
+            inputs:
+              restoreSolution: '${{ parameters.SolutionFile }}'
+
+          - script: dotnet build --configuration $(buildConfiguration) ${{ parameters.SolutionFile }}
+            displayName: 'dotnet build $(buildConfiguration)'
+
+          - ${{ each plugin in parameters.plugins }}:
+            - task: XrmFrameworkDeployPlugins@1
+              displayName: Deploying plugin ${{ plugin.name }}
+              inputs:
+                authenticationType: 'PowerPlatformSPN'
+                PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                PluginProjectPath: '${{ plugin.projectPath }}'
+                SolutionName: ${{ plugin.solution }}
+                ${{ if not(eq(plugin.deployProjectPath, '')) }}:
+                  DeployProjectPath: '${{ plugin.deployProjectPath }}'
+
+          - ${{ each web in parameters.webResources }}:
+            - task: XrmFrameworkDeployWebresources@1
+              displayName: Deploying webresources from ${{ web.name }}
+              inputs:
+                authenticationType: 'PowerPlatformSPN'
+                PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                WebresourcesProjectPath: '${{ web.projectPath }}'
+                SolutionName: ${{ web.solution }}
+                ${{ if not(eq(web.deployProjectPath, '')) }}:
+                  DeployProjectPath: '${{ web.deployProjectPath }}'
+      
+      - job: ExportSolutions
+        dependsOn: BuildProjects
+        condition: or(eq(variables.disableSolutionExport, ''), eq(variables.disableSolutionExport, false))
+        steps:
+          - checkout: self
+            persistCredentials: true
+            fetchDepth: 0
+            clean: true
+          
+          - ${{ if parameters.installNbgvTool }}:
+            - task: DotNetCoreCLI@2
+              displayName: Install NBGV tool
+              inputs:
+                command: custom
+                custom: tool
+                arguments: install --tool-path . nbgv
+
+          - pwsh: nbgv cloud -a
+            displayName: Set Build Version
+
+          - pwsh: echo "##vso[task.setvariable variable=solutionVersion;]$(NBGV_SimpleVersion).$(Build.BuildId)"
+            displayName: Set Solutions Version
+
+          - pwsh: |
+               git config --global user.email "pipeline@azure.com"
+               git config --global user.name "Pipeline Azure"
+               git fetch
+               git checkout $(BRANCH_NAME)
+            displayName: Checking out git repo
+
+          - task: PowerPlatformToolInstaller@2
+            displayName: Installing tools
+            inputs:
+              DefaultVersion: true
+          
+          - ${{ each solution in parameters.solutions }}:
+            - task: PowerPlatformSetSolutionVersion@2
+              displayName: Setting ${{ solution }} version
+              inputs:
+                authenticationType: PowerPlatformSPN
+                PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                SolutionName: ${{ solution }}
+                SolutionVersionNumber: $(solutionVersion)
+
+            - task: PowerPlatformExportSolution@2
+              displayName: Exporting Managed ${{ solution }}
+              inputs:
+                authenticationType: 'PowerPlatformSPN'
+                PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                SolutionName: '${{ solution }}'
+                SolutionOutputFile: '$(Build.ArtifactStagingDirectory)/${{ solution }}_managed.zip'
+                Managed: true
+                AsyncOperation: true
+                MaxAsyncWaitTime: '60'
+            
+            - ${{ if parameters.extractSolutions  }}:
+              - task: PowerPlatformExportSolution@2
+                displayName: Exporting ${{ solution }}
+                inputs:
+                  authenticationType: 'PowerPlatformSPN'
+                  PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                  SolutionName: ${{ solution }}
+                  SolutionOutputFile: 'Export/${{ solution }}.zip'
+                  AsyncOperation: true
+                  MaxAsyncWaitTime: '60'
+              - task: PowerPlatformUnpackSolution@2
+                displayName: Extracting ${{ solution }}
+                inputs:
+                  SolutionInputFile: 'Export/${{ solution }}.zip'
+                  SolutionTargetFolder: 'Solutions/${{ solution }}'
+                  ProcessCanvasApps: true
+          
+          - pwsh: |
+               git add Solutions/*
+               git commit -m "$(Build.BuildNumber)"
+               git push -u origin
+            workingDirectory: $(Build.SourcesDirectory)
+            displayName: Commiting customizations
+
+          - publish: $(Build.ArtifactStagingDirectory)
+            artifact: solutions
+            displayName: Publishing artifacts
+
+      - job: QualityChecks
+        dependsOn: ExportSolutions
+        steps:
+          - download: current
+            artifact: solutions
+          - task: PowerPlatformToolInstaller@2
+            displayName: Installing tools
+            inputs:
+              DefaultVersion: true
+
+          - task: PowerPlatformChecker@2
+            inputs:
+              authenticationType: 'PowerPlatformSPN'
+              PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+              FilesToAnalyze: '$(Pipeline.Workspace)/solutions/*.zip'
+              RuleSet: '0ad12346-e108-40b8-a956-9a8f95ea18c9'
+
+  - ${{ each environment in parameters.environments }}:
+    - stage: ${{ environment.name }}
+      jobs:
+        - deployment: 
+          environment: ${{ environment.name }}
+          variables:
+            - group: ${{ environment.variableGroup }}
+          ${{ if not(eq(coalesce(environment.pool, ''), '')) }}:
+            pool: ${{ environment.pool }}
+          strategy:
+            runOnce:
+              preDeploy:
+                steps:
+                  - task: PowerPlatformToolInstaller@2
+                    displayName: Installing tools
+                    inputs:
+                      DefaultVersion: true
+
+                  - ${{ if or(eq(environment.setAdminModeOnDeploy, ''), environment.setAdminModeOnDeploy) }} :
+                    - task: XrmFrameworkEnvironmentRuntimeState@2
+                      displayName: Setting Environment in Admin Mode
+                      inputs:
+                        authenticationType: 'PowerPlatformSPN'
+                        PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                        runtimeState: 'AdminOnly'
+              deploy:
+                steps:
+                  - download: current
+                    artifact: solutions
+
+                  - ${{ each solution in parameters.solutionsImportOrder }}:
+                    - task: PowerPlatformImportSolution@2
+                      displayName: Installing ${{ solution }}
+                      condition: and(not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), not(contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},')), succeeded())
+                      inputs:
+                        authenticationType: 'PowerPlatformSPN'
+                        PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                        SolutionInputFile: '$(Pipeline.Workspace)/solutions/${{ solution }}_managed.zip'
+                        AsyncOperation: true
+                        MaxAsyncWaitTime: '60'
+
+                    - task: PowerPlatformImportSolution@2
+                      displayName: Installing Holding ${{ solution }}
+                      condition: and(not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'), succeeded())
+                      inputs:
+                        authenticationType: 'PowerPlatformSPN'
+                        PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                        SolutionInputFile: '$(Pipeline.Workspace)/solutions/${{ solution }}_managed.zip'
+                        AsyncOperation: true
+                        MaxAsyncWaitTime: '60'
+                        HoldingSolution: true
+
+                  - ${{ each solution in parameters.solutionsImportOrder }}:
+                    - task: PowerPlatformApplySolutionUpgrade@2
+                      displayName: Applying Upgrade for ${{ solution }}
+                      condition: and(not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'), succeeded())
+                      inputs:
+                        authenticationType: 'PowerPlatformSPN'
+                        PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                        SolutionName: '${{ solution }}'
+                        AsyncOperation: true
+                        MaxAsyncWaitTime: '120'
+                        
+              on:
+                success:
+                  steps:
+                    - ${{ if or(eq(environment.setAdminModeOnDeploy, ''), environment.setAdminModeOnDeploy) }} :
+                      - task: XrmFrameworkEnvironmentRuntimeState@2
+                        displayName: Opening Environment access
+                        inputs:
+                          authenticationType: 'PowerPlatformSPN'
+                          PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                          runtimeState: 'Enabled'
