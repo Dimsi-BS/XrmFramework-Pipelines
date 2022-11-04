@@ -189,12 +189,13 @@ stages:
                   SolutionTargetFolder: 'Solutions/${{ solution }}'
                   ProcessCanvasApps: true
           
-          - pwsh: |
-               git add Solutions/*
-               git commit -m "$(Build.BuildNumber)"
-               git push -u origin
-            workingDirectory: $(Build.SourcesDirectory)
-            displayName: Commiting customizations
+          - ${{ if parameters.extractSolutions  }}:
+            - pwsh: |
+                git add Solutions/*
+                git commit -m "$(Build.BuildNumber)"
+                git push -u origin
+              workingDirectory: $(Build.SourcesDirectory)
+              displayName: Commiting customizations
 
           - publish: $(Build.ArtifactStagingDirectory)
             artifact: solutions
