@@ -32,6 +32,11 @@ parameters:
     type: boolean
     default: true
 
+  - name: disableQualityCheck
+    displayName: Do we need disable quality check
+    type: boolean
+    default: false
+
   - name: variableGroup
     displayName: Name of the common variable group
     type: string
@@ -201,22 +206,23 @@ stages:
             artifact: solutions
             displayName: Publishing artifacts
 
-      - job: QualityChecks
-        dependsOn: ExportSolutions
-        steps:
-          - download: current
-            artifact: solutions
-          - task: PowerPlatformToolInstaller@2
-            displayName: Installing tools
-            inputs:
-              DefaultVersion: true
+      - ${{ if not(parameters.disableQualityCheck) }}:
+        - job: QualityChecks
+          dependsOn: ExportSolutions
+          steps:
+            - download: current
+              artifact: solutions
+            - task: PowerPlatformToolInstaller@2
+              displayName: Installing tools
+              inputs:
+                DefaultVersion: true
 
-          - task: PowerPlatformChecker@2
-            inputs:
-              authenticationType: 'PowerPlatformSPN'
-              PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-              FilesToAnalyze: '$(Pipeline.Workspace)/solutions/*.zip'
-              RuleSet: '0ad12346-e108-40b8-a956-9a8f95ea18c9'
+            - task: PowerPlatformChecker@2
+              inputs:
+                authenticationType: 'PowerPlatformSPN'
+                PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                FilesToAnalyze: '$(Pipeline.Workspace)/solutions/*.zip'
+                RuleSet: '0ad12346-e108-40b8-a956-9a8f95ea18c9'
 
   - ${{ each environment in parameters.environments }}:
     - stage: ${{ environment.name }}
