@@ -124,7 +124,7 @@ stages:
       
       - job: ExportSolutions
         dependsOn: BuildProjects
-        condition: and(succeded(), or(eq(variables.disableSolutionExport, ''), eq(variables.disableSolutionExport, false)))
+        condition: and(succeeded(), or(eq(variables.disableSolutionExport, ''), eq(variables.disableSolutionExport, false)))
         steps:
           - checkout: self
             persistCredentials: true
