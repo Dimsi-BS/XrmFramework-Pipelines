@@ -9,7 +9,7 @@ parameters:
   - name: PowerPlatformSPN
     displayName: Service connection to PowerPlatform
     type: string
-    
+
   - name: solutions
     displayName: List of solutions
     type: object
@@ -26,7 +26,7 @@ parameters:
     displayName: List of Webresources projects
     type: object
     default: []
-  
+
   - name: extractSolutions
     displayName: Do we need to extract solutions to the repository
     type: boolean
@@ -45,7 +45,7 @@ parameters:
     displayName: Install NBGV tool to the agent
     type: boolean
     default: false
-  
+
   - name: environments
     displayName: List of environments
     type: object
@@ -55,7 +55,7 @@ parameters:
         PowerPlatformSPN:
         pool:
         setAdminModeOnDeploy: true
-  
+
   - name: azureFunctions
     displayName: List of Azure Functions
     type: object
@@ -121,7 +121,7 @@ stages:
                 SolutionName: ${{ web.solution }}
                 ${{ if not(eq(web.deployProjectPath, '')) }}:
                   DeployProjectPath: '${{ web.deployProjectPath }}'
-      
+
       - job: ExportSolutions
         dependsOn: BuildProjects
         condition: and(succeeded(), or(eq(variables.disableSolutionExport, ''), eq(variables.disableSolutionExport, false)))
@@ -130,7 +130,7 @@ stages:
             persistCredentials: true
             fetchDepth: 0
             clean: true
-          
+
           - ${{ if parameters.installNbgvTool }}:
             - task: DotNetCoreCLI@2
               displayName: Install NBGV tool
@@ -156,7 +156,7 @@ stages:
             displayName: Installing tools
             inputs:
               DefaultVersion: true
-          
+
           - ${{ each solution in parameters.solutions }}:
             - task: PowerPlatformSetSolutionVersion@2
               displayName: Setting ${{ solution }} version
@@ -176,7 +176,7 @@ stages:
                 Managed: true
                 AsyncOperation: true
                 MaxAsyncWaitTime: '60'
-            
+
             - ${{ if parameters.extractSolutions  }}:
               - task: PowerPlatformExportSolution@2
                 displayName: Exporting ${{ solution }}
@@ -193,7 +193,7 @@ stages:
                   SolutionInputFile: 'Export/${{ solution }}.zip'
                   SolutionTargetFolder: 'Solutions/${{ solution }}'
                   ProcessCanvasApps: true
-          
+
           - ${{ if parameters.extractSolutions  }}:
             - pwsh: |
                 git add Solutions/*
@@ -249,6 +249,14 @@ stages:
                         authenticationType: 'PowerPlatformSPN'
                         PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
                         runtimeState: 'AdminOnly'
+
+                  - ${{ if or(eq(environment.backupEnvironmentOnDeploy, ''), environment.backupEnvironmentOnDeploy) }} :
+                    - task: PowerPlatformBackupEnvironment@2
+                      inputs:
+                        authenticationType: 'PowerPlatformSPN'
+                        PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                        BackupLabel: 'Backup before $(Build.BuildNumber)'
+
               deploy:
                 steps:
                   - download: current
@@ -257,7 +265,7 @@ stages:
                   - ${{ each solution in parameters.solutionsImportOrder }}:
                     - task: PowerPlatformImportSolution@2
                       displayName: Installing ${{ solution }}
-                      condition: and(not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), not(contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},')), succeeded())
+                      condition: and(succeeded(), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), not(contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},')))
                       inputs:
                         authenticationType: 'PowerPlatformSPN'
                         PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
@@ -267,7 +275,7 @@ stages:
 
                     - task: PowerPlatformImportSolution@2
                       displayName: Installing Holding ${{ solution }}
-                      condition: and(not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'), succeeded())
+                      condition: and(succeeded(), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'))
                       inputs:
                         authenticationType: 'PowerPlatformSPN'
                         PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
@@ -279,14 +287,30 @@ stages:
                   - ${{ each solution in parameters.solutionsImportOrder }}:
                     - task: PowerPlatformApplySolutionUpgrade@2
                       displayName: Applying Upgrade for ${{ solution }}
-                      condition: and(not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'), succeeded())
+                      condition: and(succeeded(), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'))
                       inputs:
                         authenticationType: 'PowerPlatformSPN'
                         PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
                         SolutionName: '${{ solution }}'
                         AsyncOperation: true
                         MaxAsyncWaitTime: '120'
-                        
+
+                  - ${{ each azureFunction in parameters.azureFunctions }}:
+                    - ${{ each functionEnv in azureFunction.environments }}:
+                      - ${{ if eq(functionEnv.name, environment.name) }} :
+                        - task: AzureFunctionApp@1
+                          displayName: 'Deploy AF {{ azureFuntion.name }}'
+                          inputs:
+                            azureSubscription: '${{ coalesce(functionEnv.azureSubscription, azureFunction.azureSubscription) }}'
+                            appType: 'functionApp'
+                            appName: '${{ coalesce(functionEnv.appName, azureFunction.appName) }}'
+                            ${{ if not(eq(functionEnv.slotName, '')) }}:
+                              deployToSlotOrASE: true
+                              resourceGroupName: '${{ functionEnv.resourceGroupName }}'
+                              slotName: '${{ functionEnv.slotName }}'
+                            package: '$(System.DefaultWorkingDirectory)/**/{{ azureFunction.name }}.zip'
+                            deploymentMethod: 'auto'
+
               on:
                 success:
                   steps:
