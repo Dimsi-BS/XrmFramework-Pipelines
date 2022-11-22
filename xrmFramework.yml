@@ -132,7 +132,7 @@ stages:
                 arguments: '--configuration ${{ parameters.buildConfiguration }} --output $(build.artifactstagingdirectory)'
                 zipAfterPublish: True
 
-          - ${{ if not(or(eq(parameters.azureFunctions, ''), eq(length(parameters.azureFunctions), 0)) }}:
+          - ${{ if not(or(eq(parameters.azureFunctions, ''), eq(length(parameters.azureFunctions), 0))) }}:
             - publish: $(Build.ArtifactStagingDirectory)
               artifact: azureFunctions
               displayName: Publishing artifacts
