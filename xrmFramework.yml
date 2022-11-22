@@ -122,6 +122,21 @@ stages:
                 ${{ if not(eq(web.deployProjectPath, '')) }}:
                   DeployProjectPath: '${{ web.deployProjectPath }}'
 
+          - ${{ each azureFunction in parameters.azureFunctions }}:
+            - task: DotNetCoreCLI@2
+              displayName: Publish {{ azureFunction.name }}
+              inputs:
+                command: 'publish'
+                publishWebProjects: false
+                projects: '{{azureFunction.projectPath}}/{{azureFunction.name}}.csproj'
+                arguments: '--configuration ${{ parameters.buildConfiguration }} --output $(build.artifactstagingdirectory)'
+                zipAfterPublish: True
+
+          - ${{ if not(or(eq(parameters.azureFunctions, ''), eq(parameters.azureFunctions.length, 0)) }}:
+            - publish: $(Build.ArtifactStagingDirectory)
+              artifact: azureFunctions
+              displayName: Publishing artifacts
+
       - job: ExportSolutions
         dependsOn: BuildProjects
         condition: and(succeeded(), or(eq(variables.disableSolutionExport, ''), eq(variables.disableSolutionExport, false)))
@@ -308,7 +323,7 @@ stages:
                               deployToSlotOrASE: true
                               resourceGroupName: '${{ functionEnv.resourceGroupName }}'
                               slotName: '${{ functionEnv.slotName }}'
-                            package: '$(System.DefaultWorkingDirectory)/**/{{ azureFunction.name }}.zip'
+                            package: '$(System.DefaultWorkingDirectory)/**/azureFunctions/{{ azureFunction.name }}.zip'
                             deploymentMethod: 'auto'
 
               on:
