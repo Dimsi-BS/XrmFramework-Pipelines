@@ -314,7 +314,7 @@ stages:
                     - ${{ each functionEnv in azureFunction.environments }}:
                       - ${{ if eq(functionEnv.name, environment.name) }} :
                         - task: AzureFunctionApp@1
-                          displayName: 'Deploy AF {{ azureFuntion.name }}'
+                          displayName: 'Deploy AF ${{ azureFuntion.name }}'
                           inputs:
                             azureSubscription: '${{ coalesce(functionEnv.azureSubscription, azureFunction.azureSubscription) }}'
                             appType: 'functionApp'
@@ -323,7 +323,7 @@ stages:
                               deployToSlotOrASE: true
                               resourceGroupName: '${{ functionEnv.resourceGroupName }}'
                               slotName: '${{ functionEnv.slotName }}'
-                            package: '$(System.DefaultWorkingDirectory)/**/azureFunctions/{{ azureFunction.name }}.zip'
+                            package: '$(System.DefaultWorkingDirectory)/**/azureFunctions/${{ azureFunction.name }}.zip'
                             deploymentMethod: 'auto'
 
               on:
