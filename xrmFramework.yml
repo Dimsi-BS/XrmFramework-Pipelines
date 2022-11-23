@@ -277,6 +277,10 @@ stages:
                   - download: current
                     artifact: solutions
 
+                  - ${{ if not(eq(length(parameters.azureFunctions), 0)) }}:
+                    - download: current
+                      artifact: azureFunctions
+
                   - task: PowerPlatformToolInstaller@2
                     displayName: Installing tools
                     inputs:
