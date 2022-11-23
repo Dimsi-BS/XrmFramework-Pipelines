@@ -124,11 +124,11 @@ stages:
 
           - ${{ each azureFunction in parameters.azureFunctions }}:
             - task: DotNetCoreCLI@2
-              displayName: Publish {{ azureFunction.name }}
+              displayName: Publish ${{ azureFunction.name }}
               inputs:
                 command: 'publish'
                 publishWebProjects: false
-                projects: '{{azureFunction.projectPath}}/{{azureFunction.name}}.csproj'
+                projects: '${{azureFunction.projectPath}}/${{azureFunction.name}}.csproj'
                 arguments: '--configuration ${{ parameters.buildConfiguration }} --output $(build.artifactstagingdirectory)'
                 zipAfterPublish: True
 
