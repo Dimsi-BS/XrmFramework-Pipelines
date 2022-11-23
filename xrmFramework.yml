@@ -129,7 +129,7 @@ stages:
                 command: 'publish'
                 publishWebProjects: false
                 projects: '${{azureFunction.projectPath}}/${{azureFunction.name}}.csproj'
-                arguments: '--configuration ${{ parameters.buildConfiguration }} --output $(build.artifactstagingdirectory)'
+                arguments: '--configuration $(buildConfiguration) --output $(build.artifactstagingdirectory)'
                 zipAfterPublish: True
 
           - ${{ if not(or(eq(parameters.azureFunctions, ''), eq(length(parameters.azureFunctions), 0))) }}:
