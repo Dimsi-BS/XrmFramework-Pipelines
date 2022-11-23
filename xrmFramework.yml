@@ -251,6 +251,7 @@ stages:
           strategy:
             runOnce:
               preDeploy:
+                displayName: Prédéploiement
                 steps:
                   - task: PowerPlatformToolInstaller@2
                     displayName: Installing tools
@@ -273,9 +274,15 @@ stages:
                         BackupLabel: 'Backup before $(Build.BuildNumber)'
 
               deploy:
+                displayName: Déploiement
                 steps:
                   - download: current
                     artifact: solutions
+
+                  - task: PowerPlatformToolInstaller@2
+                    displayName: Installing tools
+                    inputs:
+                      DefaultVersion: true
 
                   - ${{ each solution in parameters.solutionsImportOrder }}:
                     - task: PowerPlatformImportSolution@2
