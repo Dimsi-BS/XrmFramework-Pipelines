@@ -87,15 +87,7 @@ stages:
               authenticationType: 'PowerPlatformSPN'
               PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
 
-          - task: NuGetToolInstaller@1
-            displayName: Install NuGet Tool
-            inputs:
-              versionSpec: '>= 5.0.0'
-
-          - task: NuGetCommand@2
-            displayName: Restoring NuGet packages
-            inputs:
-              restoreSolution: '${{ parameters.SolutionFile }}'
+     
 
           - script: dotnet build --configuration $(buildConfiguration) ${{ parameters.SolutionFile }}
             displayName: 'dotnet build $(buildConfiguration)'
