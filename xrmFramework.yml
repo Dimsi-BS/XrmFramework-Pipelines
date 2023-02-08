@@ -61,7 +61,7 @@ parameters:
     type: object
     default: []
 
-  - name: beforeSolutionExtractUsersteps
+  - name: beforeSolutionExportUsersteps
     type: stepList
     default: []
 
@@ -168,7 +168,7 @@ stages:
             inputs:
               DefaultVersion: true
 
-          - ${{ each step in parameters.beforeSolutionExtractUsersteps }}:
+          - ${{ each step in parameters.beforeSolutionExportUsersteps }}:
             - ${{ step }}
 
           - ${{ each solution in parameters.solutions }}:
