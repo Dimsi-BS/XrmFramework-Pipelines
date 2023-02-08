@@ -61,6 +61,10 @@ parameters:
     type: object
     default: []
 
+- name: beforeSolutionExtractUsersteps
+  type: stepList
+  default: []
+
 variables:
   - group: '${{ parameters.variableGroup }}'
   - name: BRANCH_NAME
@@ -163,6 +167,9 @@ stages:
             displayName: Installing tools
             inputs:
               DefaultVersion: true
+
+          - ${{ each step in parameters.beforeSolutionExtractUsersteps }}:
+            - ${{ step }}
 
           - ${{ each solution in parameters.solutions }}:
             - task: PowerPlatformSetSolutionVersion@2
