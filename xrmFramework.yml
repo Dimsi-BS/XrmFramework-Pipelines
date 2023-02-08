@@ -61,9 +61,9 @@ parameters:
     type: object
     default: []
 
-- name: beforeSolutionExtractUsersteps
-  type: stepList
-  default: []
+  - name: beforeSolutionExtractUsersteps
+    type: stepList
+    default: []
 
 variables:
   - group: '${{ parameters.variableGroup }}'
