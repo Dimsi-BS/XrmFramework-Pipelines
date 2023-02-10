@@ -61,6 +61,11 @@ parameters:
     type: object
     default: []
 
+  - name: webApps
+    displayName: List of web applications
+    type: object
+    default: []
+
   - name: beforeSolutionExportUsersteps
     type: stepList
     default: []
@@ -125,6 +130,16 @@ stages:
                 command: 'publish'
                 publishWebProjects: false
                 projects: '${{azureFunction.projectPath}}/${{azureFunction.name}}.csproj'
+                arguments: '--configuration $(buildConfiguration) --output $(build.artifactstagingdirectory)'
+                zipAfterPublish: True
+
+          - ${{ each webApp in parameters.webApps }}:
+            - task: DotNetCoreCLI@2
+              displayName: Publish ${{ azureFunction.name }}
+              inputs:
+                command: 'publish'
+                publishWebProjects: true
+                projects: '${{webApp.projectPath}}/${{webApp.name}}.csproj'
                 arguments: '--configuration $(buildConfiguration) --output $(build.artifactstagingdirectory)'
                 zipAfterPublish: True
 
@@ -332,6 +347,21 @@ stages:
                               resourceGroupName: '${{ functionEnv.resourceGroupName }}'
                               slotName: '${{ functionEnv.slotName }}'
                             package: '$(Pipeline.Workspace)/azureFunctions/${{ azureFunction.name }}.zip'
+                            deploymentMethod: 'auto'
+
+                  - ${{ each webApp in parameters.webApps }}:
+                    - ${{ each webAppEnv in webApp.environments }}:
+                      - ${{ if eq(webAppEnv.name, environment.name) }} :
+                        - task: AzureWebApp@1
+                          inputs:
+                            azureSubscription: '${{ coalesce(webAppEnv.azureSubscription, webApp.azureSubscription) }}'
+                            appType: '${{ coalesce(webAppEnv.appType, webApp.appType) }}'
+                            appName: '${{ coalesce(webAppEnv.appName, webApp.appName) }}'
+                            ${{ if not(eq(webAppEnv.slotName, '')) }}:
+                              deployToSlotOrASE: true
+                              resourceGroupName: '${{ webAppEnv.resourceGroupName }}'
+                              slotName: '${{ webAppEnv.slotName }}'
+                            package: '$(Pipeline.Workspace)/**/${{ webApp.name }}.zip'
                             deploymentMethod: 'auto'
 
               on:
