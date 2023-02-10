@@ -61,7 +61,7 @@ parameters:
     type: object
     default: []
 
-  - name: webApps
+  - name: webApplications
     displayName: List of web applications
     type: object
     default: []
@@ -133,7 +133,7 @@ stages:
                 arguments: '--configuration $(buildConfiguration) --output $(build.artifactstagingdirectory)'
                 zipAfterPublish: True
 
-          - ${{ each webApp in parameters.webApps }}:
+          - ${{ each webApp in parameters.webApplications }}:
             - task: DotNetCoreCLI@2
               displayName: Publish ${{ azureFunction.name }}
               inputs:
@@ -146,6 +146,11 @@ stages:
           - ${{ if not(or(eq(parameters.azureFunctions, ''), eq(length(parameters.azureFunctions), 0))) }}:
             - publish: $(Build.ArtifactStagingDirectory)
               artifact: azureFunctions
+              displayName: Publishing artifacts
+
+          - ${{ if not(or(eq(parameters.webApplications, ''), eq(length(parameters.webApplications), 0))) }}:
+            - publish: $(Build.ArtifactStagingDirectory)
+              artifact: webApplications
               displayName: Publishing artifacts
 
       - job: ExportSolutions
@@ -295,6 +300,10 @@ stages:
                     - download: current
                       artifact: azureFunctions
 
+                  - ${{ if not(eq(length(parameters.webApplications), 0)) }}:
+                    - download: current
+                      artifact: webApplications
+
                   - task: PowerPlatformToolInstaller@2
                     displayName: Installing tools
                     inputs:
@@ -349,7 +358,7 @@ stages:
                             package: '$(Pipeline.Workspace)/azureFunctions/${{ azureFunction.name }}.zip'
                             deploymentMethod: 'auto'
 
-                  - ${{ each webApp in parameters.webApps }}:
+                  - ${{ each webApp in parameters.webApplications }}:
                     - ${{ each webAppEnv in webApp.environments }}:
                       - ${{ if eq(webAppEnv.name, environment.name) }} :
                         - task: AzureWebApp@1
@@ -361,7 +370,7 @@ stages:
                               deployToSlotOrASE: true
                               resourceGroupName: '${{ webAppEnv.resourceGroupName }}'
                               slotName: '${{ webAppEnv.slotName }}'
-                            package: '$(Pipeline.Workspace)/**/${{ webApp.name }}.zip'
+                            package: '$(Pipeline.Workspace)/webApplications/${{ webApp.name }}.zip'
                             deploymentMethod: 'auto'
 
               on:
