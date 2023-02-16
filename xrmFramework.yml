@@ -189,7 +189,8 @@ stages:
               DefaultVersion: true
 
           - ${{ each step in parameters.beforeSolutionExportUsersteps }}:
-            - ${{ step }}
+            - ${{ each pair in step }}:
+                ${{ pair.key }}: ${{ pair.value }}
 
           - ${{ each solution in parameters.solutions }}:
             - task: PowerPlatformSetSolutionVersion@2
