@@ -1,0 +1,92 @@
+# Copyright DIMSI
+
+parameters:
+
+  - name: PowerPlatformSPN
+    displayName: Service connection to PowerPlatform
+    type: string
+
+  - name: sourceEnvironment
+    displayName: Source environment
+    type: object
+    default: []
+
+  - name: destinationEnvironment
+    displayName: Destination environment
+    type: object
+    default: []
+
+  - name: backupDestinationEnvironment
+    displayName: Do we need to extract solutions to the repository
+    type: boolean
+    default: false
+
+  - name: DisableAdminMode
+    displayName: Disable admin mode in destination environment
+    type: boolean
+    default: false
+
+  - name: CopyType
+    displayName: Copy type (either full or minimal)
+    type: string
+    default: 'MinimalCopy'
+
+  - name: cleaningFunction
+    displayName: Cleaning function to be used
+    type: object
+    default: []
+
+stages:
+  - stage: Preparation
+    displayName: Preparation
+    jobs:
+      - job: Preparation
+        steps :
+
+          - checkout: self
+            persistCredentials: true
+            fetchDepth: 0
+            clean: true
+
+          - task: XrmFrameworkConnectionStringsCreation@1
+            inputs:
+              authenticationType: 'PowerPlatformSPN'
+              PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+
+  - stage: CopyEnvironment
+    displayName: Copy ${{parameters.sourceEnvironment}} to ${{parameters.destinationEnvironment}}
+    jobs:
+      - job: CopyEnvironment
+        steps:
+
+        - task: PowerPlatformToolInstaller@2
+          displayName: Installing tools
+          inputs:
+            DefaultVersion: true
+
+        - ${{ if eq(parameters.backupDestinationEnvironment, true) }}:
+          - task: microsoft-IsvExpTools.PowerPlatform-BuildTools.backup-environment.PowerPlatformBackupEnvironment@0
+            displayName: 'Power Platform Backup - ${{parameters.destinationEnvironment}}'
+            inputs:
+              authenticationType: 'PowerPlatformSPN'
+              PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+              PowerPlatformEnvironment: '${{ parameters.destinationEnvironment.url }}'
+              BackupLabel: 'Full backup - $(Build.BuildNumber)'
+
+        - task: microsoft-IsvExpTools.PowerPlatform-BuildTools.copy-environment.PowerPlatformCopyEnvironment@0
+          displayName: 'Power Platform Copy Environment '
+          inputs:
+            authenticationType: 'PowerPlatformSPN'
+            PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+            PowerPlatformEnvironment: '${{ parameters.sourceEnvironment.url }}'
+            TargetEnvironmentUrl: '${{ parameters.destinationEnvironment.url }}'
+            CopyType: '${{ parameters.CopyType }}'
+            DisableAdminMode: '${{ parameters.DisableAdminMode }}'
+
+  - ${{ if not(or(eq(parameters.cleaningFunction, ''), eq(length(parameters.cleaningFunction), 0))) }}:
+    - stage: CleanDestinationEnvironment
+      displayName: Clean environment ${{parameters.destinationEnvironment}}
+      jobs:
+        - job: CleanEnvironment
+          steps:
+          - powershell: '$(Pipeline.Workspace)/s/$(parameters.cleaningFunction.scriptPath)'
