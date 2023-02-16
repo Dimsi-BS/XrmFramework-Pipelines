@@ -31,9 +31,16 @@ parameters:
     type: string
     default: 'MinimalCopy'
 
-  - name: cleaningFunction
-    displayName: Cleaning function to be used
-    type: object
+  - name: preparationUsersteps
+    type: stepList
+    default: []
+
+  - name: beforeCopyEnvironmentUsersteps
+    type: stepList
+    default: []
+
+  - name: afterCopyEnvironmentUsersteps
+    type: stepList
     default: []
 
 stages:
@@ -53,20 +60,23 @@ stages:
               authenticationType: 'PowerPlatformSPN'
               PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
 
+          - ${{ each step in parameters.preparationUsersteps }}:
+            - ${{ each pair in step }}:
+                ${{ pair.key }}: ${{ pair.value }}
+
   - stage: CopyEnvironment
-    displayName: Copy ${{parameters.sourceEnvironment}} to ${{parameters.destinationEnvironment}}
+    displayName: Copy ${{parameters.sourceEnvironment}} to ${{ parameters.destinationEnvironment.name }}
     jobs:
       - job: CopyEnvironment
         steps:
 
-        - task: PowerPlatformToolInstaller@2
-          displayName: Installing tools
-          inputs:
-            DefaultVersion: true
+        - ${{ each step in parameters.beforeCopyEnvironmentUsersteps }}:
+          - ${{ each pair in step }}:
+              ${{ pair.key }}: ${{ pair.value }}
 
         - ${{ if eq(parameters.backupDestinationEnvironment, true) }}:
           - task: microsoft-IsvExpTools.PowerPlatform-BuildTools.backup-environment.PowerPlatformBackupEnvironment@0
-            displayName: 'Power Platform Backup - ${{parameters.destinationEnvironment}}'
+            displayName: 'Power Platform Backup - ${{ parameters.destinationEnvironment.name }}'
             inputs:
               authenticationType: 'PowerPlatformSPN'
               PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
@@ -83,10 +93,6 @@ stages:
             CopyType: '${{ parameters.CopyType }}'
             DisableAdminMode: '${{ parameters.DisableAdminMode }}'
 
-  - ${{ if not(or(eq(parameters.cleaningFunction, ''), eq(length(parameters.cleaningFunction), 0))) }}:
-    - stage: CleanDestinationEnvironment
-      displayName: Clean environment ${{parameters.destinationEnvironment}}
-      jobs:
-        - job: CleanEnvironment
-          steps:
-          - powershell: '$(Pipeline.Workspace)/s/$(parameters.cleaningFunction.scriptPath)'
+        - ${{ each step in parameters.afterCopyEnvironmentUsersteps }}:
+          - ${{ each pair in step }}:
+              ${{ pair.key }}: ${{ pair.value }}
