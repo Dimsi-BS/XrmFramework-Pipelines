@@ -135,7 +135,7 @@ stages:
 
           - ${{ each webApp in parameters.webApplications }}:
             - task: DotNetCoreCLI@2
-              displayName: Publish ${{ azureFunction.name }}
+              displayName: Publish ${{ webApp.name }}
               inputs:
                 command: 'publish'
                 publishWebProjects: true
