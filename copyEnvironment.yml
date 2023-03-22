@@ -55,11 +55,6 @@ stages:
             fetchDepth: 0
             clean: true
 
-          - task: XrmFrameworkConnectionStringsCreation@1
-            inputs:
-              authenticationType: 'PowerPlatformSPN'
-              PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-
           - ${{ each step in parameters.preparationUsersteps }}:
             - ${{ each pair in step }}:
                 ${{ pair.key }}: ${{ pair.value }}
