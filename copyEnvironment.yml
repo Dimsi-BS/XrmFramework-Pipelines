@@ -65,7 +65,7 @@ stages:
                 ${{ pair.key }}: ${{ pair.value }}
 
   - stage: CopyEnvironment
-    displayName: Copy ${{parameters.sourceEnvironment}} to ${{ parameters.destinationEnvironment.name }}
+    displayName: Copy ${{parameters.sourceEnvironment.name}} to ${{ parameters.destinationEnvironment.name }}
     jobs:
       - job: CopyEnvironment
         steps:
@@ -79,7 +79,7 @@ stages:
             displayName: 'Power Platform Backup - ${{ parameters.destinationEnvironment.name }}'
             inputs:
               authenticationType: 'PowerPlatformSPN'
-              PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+              PowerPlatformSPN: '${{ coalesce(backupDestinationEnvironment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
               PowerPlatformEnvironment: '${{ parameters.destinationEnvironment.url }}'
               BackupLabel: 'Full backup - $(Build.BuildNumber)'
 
