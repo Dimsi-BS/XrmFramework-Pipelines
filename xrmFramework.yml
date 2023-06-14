@@ -283,7 +283,7 @@ stages:
                       inputs:
                         authenticationType: 'PowerPlatformSPN'
                         PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
-                        runtimeState: 'AdminOnly'
+                        runtimeState: 'AdminMode'
 
                   - ${{ if or(eq(environment.backupEnvironmentOnDeploy, ''), environment.backupEnvironmentOnDeploy) }} :
                     - task: PowerPlatformBackupEnvironment@2
