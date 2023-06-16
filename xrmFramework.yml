@@ -6,6 +6,11 @@ parameters:
     type: string
     default:
 
+  - name: ConfigFolderPath
+    displayName: Path to the Config folder
+    type: string
+    default:
+
   - name: PowerPlatformSPN
     displayName: Service connection to PowerPlatform
     type: string
@@ -71,7 +76,8 @@ parameters:
     default: []
 
 variables:
-  - group: '${{ parameters.variableGroup }}'
+  - ${{ if not(eq(parameters.variableGroup, '')) }}:
+    - group: '${{ parameters.variableGroup }}'
   - name: BRANCH_NAME
     value: $[replace(variables['Build.SourceBranch'], 'refs/heads/', '')]
   - name: buildPlatform
@@ -95,7 +101,9 @@ stages:
             inputs:
               authenticationType: 'PowerPlatformSPN'
               PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-
+              ${{ if not(eq(parameters.ConfigFolderPath, '')) }}:
+                ConnectionStringsConfigPath: ${{ parameters.ConfigFolderPath }}/connectionStrings.json
+                XrmFrameworkConfigPath: ${{ parameters.ConfigFolderPath }}/xrmFramework.json
      
 
           - script: dotnet build --configuration $(buildConfiguration) ${{ parameters.SolutionFile }}
