@@ -71,6 +71,7 @@ The environment object contains the following properties
 | PowerPlatformSPN| false | The global PowerPlatformSPN | Name of the service Connection for this environment |
 | pool| false | The global pool | Name of the agent pool used for this environment |
 | setAdminModeOnDeploy| false | true | Specifies if the AdminMode is enabled before deploying to an environment |
+| retentionDays        | false | | Specifies a custom retention time for the stage                                                                |
 
 ### Plugins configuration
 
