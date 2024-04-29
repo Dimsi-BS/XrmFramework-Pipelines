@@ -285,7 +285,7 @@ stages:
                     inputs:
                       DefaultVersion: true
 
-                  - ${{ if or(eq(environment.setAdminModeOnDeploy, ''), environment.setAdminModeOnDeploy) }} :
+                  - ${{ if or(eq(environment.setAdminModeOnDeploy, ''), eq(environment.setAdminModeOnDeploy, true)) }} :
                     - task: XrmFrameworkEnvironmentRuntimeState@2
                       displayName: Setting Environment in Admin Mode
                       inputs:
@@ -293,7 +293,7 @@ stages:
                         PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
                         runtimeState: 'AdminMode'
 
-                  - ${{ if or(eq(environment.backupEnvironmentOnDeploy, ''), environment.backupEnvironmentOnDeploy) }} :
+                  - ${{ if or(eq(environment.backupEnvironmentOnDeploy, ''), eq(environment.backupEnvironmentOnDeploy, true)) }} :
                     - task: PowerPlatformBackupEnvironment@2
                       inputs:
                         authenticationType: 'PowerPlatformSPN'
