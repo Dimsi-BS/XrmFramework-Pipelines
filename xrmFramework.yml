@@ -285,7 +285,7 @@ stages:
                     inputs:
                       DefaultVersion: true
 
-                  - ${{ if or(eq(environment.setAdminModeOnDeploy, ''), environment.setAdminModeOnDeploy) }} :
+                  - ${{ if or(eq(environment.setAdminModeOnDeploy, ''), eq(environment.setAdminModeOnDeploy, true)) }} :
                     - task: XrmFrameworkEnvironmentRuntimeState@2
                       displayName: Setting Environment in Admin Mode
                       inputs:
