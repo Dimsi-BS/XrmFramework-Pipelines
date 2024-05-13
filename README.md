@@ -12,7 +12,7 @@ resources:
     - repository: xrmFramework
         type: github
         endpoint: github
-        name: cgoconseils/XrmFramework-Pipelines
+        name: Dimsi-BS/XrmFramework-Pipelines
         ref: refs/tags/1.0.0
 
 ```
