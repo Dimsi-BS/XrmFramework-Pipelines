@@ -42,6 +42,11 @@ parameters:
     type: boolean
     default: false
 
+  - name: skipBuildJob
+    displayName: Skip the build part of the pipeline
+    type: boolean
+    default: false
+
   - name: variableGroup
     displayName: Name of the common variable group
     type: string
@@ -89,77 +94,78 @@ stages:
   - stage: Preparation
     displayName: Build and extract
     jobs:
-      - job: BuildProjects
-        steps :
-
-          - checkout: self
-            persistCredentials: true
-            fetchDepth: 0
-            clean: true
-
-          - task: XrmFrameworkConnectionStringsCreation@1
-            inputs:
-              authenticationType: 'PowerPlatformSPN'
-              PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-              ${{ if not(eq(parameters.ConfigFolderPath, '')) }}:
-                ConnectionStringsConfigPath: ${{ parameters.ConfigFolderPath }}/connectionStrings.json
-                XrmFrameworkConfigPath: ${{ parameters.ConfigFolderPath }}/xrmFramework.json
-     
-
-          - script: dotnet build --configuration $(buildConfiguration) ${{ parameters.SolutionFile }}
-            displayName: 'dotnet build $(buildConfiguration)'
-
-          - ${{ each plugin in parameters.plugins }}:
-            - task: XrmFrameworkDeployPlugins@1
-              displayName: Deploying plugin ${{ plugin.name }}
+      - ${{ if not(parameters.skipBuildJob) }}:
+        - job: BuildProjects
+          steps :
+  
+            - checkout: self
+              persistCredentials: true
+              fetchDepth: 0
+              clean: true
+  
+            - task: XrmFrameworkConnectionStringsCreation@1
               inputs:
                 authenticationType: 'PowerPlatformSPN'
                 PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                PluginProjectPath: '${{ plugin.projectPath }}'
-                SolutionName: ${{ plugin.solution }}
-                ${{ if not(eq(plugin.deployProjectPath, '')) }}:
-                  DeployProjectPath: '${{ plugin.deployProjectPath }}'
-
-          - ${{ each web in parameters.webResources }}:
-            - task: XrmFrameworkDeployWebresources@1
-              displayName: Deploying webresources from ${{ web.name }}
-              inputs:
-                authenticationType: 'PowerPlatformSPN'
-                PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                WebresourcesProjectPath: '${{ web.projectPath }}'
-                SolutionName: ${{ web.solution }}
-                ${{ if not(eq(web.deployProjectPath, '')) }}:
-                  DeployProjectPath: '${{ web.deployProjectPath }}'
-
-          - ${{ each azureFunction in parameters.azureFunctions }}:
-            - task: DotNetCoreCLI@2
-              displayName: Publish ${{ azureFunction.name }}
-              inputs:
-                command: 'publish'
-                publishWebProjects: false
-                projects: '${{azureFunction.projectPath}}/${{azureFunction.name}}.csproj'
-                arguments: '--configuration $(buildConfiguration) --output $(build.artifactstagingdirectory)'
-                zipAfterPublish: True
-
-          - ${{ each webApp in parameters.webApplications }}:
-            - task: DotNetCoreCLI@2
-              displayName: Publish ${{ webApp.name }}
-              inputs:
-                command: 'publish'
-                publishWebProjects: true
-                projects: '${{webApp.projectPath}}/${{webApp.name}}.csproj'
-                arguments: '--configuration $(buildConfiguration) --output $(build.artifactstagingdirectory)'
-                zipAfterPublish: True
-
-          - ${{ if not(or(eq(parameters.azureFunctions, ''), eq(length(parameters.azureFunctions), 0))) }}:
-            - publish: $(Build.ArtifactStagingDirectory)
-              artifact: azureFunctions
-              displayName: Publishing artifacts
-
-          - ${{ if not(or(eq(parameters.webApplications, ''), eq(length(parameters.webApplications), 0))) }}:
-            - publish: $(Build.ArtifactStagingDirectory)
-              artifact: webApplications
-              displayName: Publishing artifacts
+                ${{ if not(eq(parameters.ConfigFolderPath, '')) }}:
+                  ConnectionStringsConfigPath: ${{ parameters.ConfigFolderPath }}/connectionStrings.json
+                  XrmFrameworkConfigPath: ${{ parameters.ConfigFolderPath }}/xrmFramework.json
+       
+  
+            - script: dotnet build --configuration $(buildConfiguration) ${{ parameters.SolutionFile }}
+              displayName: 'dotnet build $(buildConfiguration)'
+  
+            - ${{ each plugin in parameters.plugins }}:
+              - task: XrmFrameworkDeployPlugins@1
+                displayName: Deploying plugin ${{ plugin.name }}
+                inputs:
+                  authenticationType: 'PowerPlatformSPN'
+                  PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                  PluginProjectPath: '${{ plugin.projectPath }}'
+                  SolutionName: ${{ plugin.solution }}
+                  ${{ if not(eq(plugin.deployProjectPath, '')) }}:
+                    DeployProjectPath: '${{ plugin.deployProjectPath }}'
+  
+            - ${{ each web in parameters.webResources }}:
+              - task: XrmFrameworkDeployWebresources@1
+                displayName: Deploying webresources from ${{ web.name }}
+                inputs:
+                  authenticationType: 'PowerPlatformSPN'
+                  PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                  WebresourcesProjectPath: '${{ web.projectPath }}'
+                  SolutionName: ${{ web.solution }}
+                  ${{ if not(eq(web.deployProjectPath, '')) }}:
+                    DeployProjectPath: '${{ web.deployProjectPath }}'
+  
+            - ${{ each azureFunction in parameters.azureFunctions }}:
+              - task: DotNetCoreCLI@2
+                displayName: Publish ${{ azureFunction.name }}
+                inputs:
+                  command: 'publish'
+                  publishWebProjects: false
+                  projects: '${{azureFunction.projectPath}}/${{azureFunction.name}}.csproj'
+                  arguments: '--configuration $(buildConfiguration) --output $(build.artifactstagingdirectory)'
+                  zipAfterPublish: True
+  
+            - ${{ each webApp in parameters.webApplications }}:
+              - task: DotNetCoreCLI@2
+                displayName: Publish ${{ webApp.name }}
+                inputs:
+                  command: 'publish'
+                  publishWebProjects: true
+                  projects: '${{webApp.projectPath}}/${{webApp.name}}.csproj'
+                  arguments: '--configuration $(buildConfiguration) --output $(build.artifactstagingdirectory)'
+                  zipAfterPublish: True
+  
+            - ${{ if not(or(eq(parameters.azureFunctions, ''), eq(length(parameters.azureFunctions), 0))) }}:
+              - publish: $(Build.ArtifactStagingDirectory)
+                artifact: azureFunctions
+                displayName: Publishing artifacts
+  
+            - ${{ if not(or(eq(parameters.webApplications, ''), eq(length(parameters.webApplications), 0))) }}:
+              - publish: $(Build.ArtifactStagingDirectory)
+                artifact: webApplications
+                displayName: Publishing artifacts
 
       - job: ExportSolutions
         dependsOn: BuildProjects

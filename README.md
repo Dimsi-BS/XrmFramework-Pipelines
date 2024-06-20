@@ -41,6 +41,7 @@ Here is the list of all possible template parameters.
 |SolutionFile | true (if using plugin deployment) | | Name of the solution file for your XrmFramework project | ``` SolutionFile: MySolution.sln ```|
 |ConfigFolderPath|false| | Path to the folder containing the XrmFramework configuration files | ```ConfigFolderPath`: $(Build.SourcesDirectory)/Config/```|
 | extractSolutions | false | true | Indicates if we want the solutions to be extracted to the source control on build | ``` extractSolutions: false``` |
+| skipBuildJob | false | true | Indicates if we want build job skipped | ``` skipBuildJob: false``` |
 | disableQualityCheck | false | false | Indicates if we want the solutions to be extracted to the source control on build | ``` disableQualityCheck: true``` |
 |variableGroup | false | | Name of the variable group used for the Build phase | see [Variable groups](#variable-groups) |
 | installNbgvTool | false | false | Indicates if we want the nbgv tools to be installed by the pipeline (Azure agents have it installed by default) | ``` installNbgvTool: false``` |
