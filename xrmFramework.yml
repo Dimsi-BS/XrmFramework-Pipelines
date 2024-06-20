@@ -168,8 +168,11 @@ stages:
                 displayName: Publishing artifacts
 
       - job: ExportSolutions
-        dependsOn: BuildProjects
-        condition: and(succeeded(), or(eq(variables.disableSolutionExport, ''), eq(variables.disableSolutionExport, false)))
+        ${{ if not(parameters.skipBuildJob) }}:
+          dependsOn: BuildProjects
+          condition: and(succeeded(), or(eq(variables.disableSolutionExport, ''), eq(variables.disableSolutionExport, false)))
+        ${{ if parameters.skipBuildJob }}:
+          condition: or(eq(variables.disableSolutionExport, ''), eq(variables.disableSolutionExport, false))
         steps:
           - checkout: self
             persistCredentials: true
