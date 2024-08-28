@@ -61,7 +61,7 @@ Here is an example of the ```environments``` parameter value
         PowerPlatformSPN: Specific_SPN_For_Production
         pool: Specific_Pool_For_Production
         setAdminModeOnDeploy: true
-        disableBackup : false
+        backupEnvironmentOnDeploy : false
 ```
 
 The environment object contains the following properties
@@ -73,7 +73,7 @@ The environment object contains the following properties
 | PowerPlatformSPN| false | The global PowerPlatformSPN | Name of the service Connection for this environment |
 | pool| false | The global pool | Name of the agent pool used for this environment |
 | setAdminModeOnDeploy| false | true | Specifies if the AdminMode is enabled before deploying to an environment |
-| disableBackup | false | false | Indicates if the backup will be skipped while deployment |
+| backupEnvironmentOnDeploy | false | true | Indicates if the backup will be skipped while deployment |
 | retentionDays        | false | | Specifies a custom retention time for the stage                                                                |
 
 ### Plugins configuration
