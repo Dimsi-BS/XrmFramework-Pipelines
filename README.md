@@ -61,6 +61,7 @@ Here is an example of the ```environments``` parameter value
         PowerPlatformSPN: Specific_SPN_For_Production
         pool: Specific_Pool_For_Production
         setAdminModeOnDeploy: true
+        disableBackup : false
 ```
 
 The environment object contains the following properties
@@ -72,6 +73,7 @@ The environment object contains the following properties
 | PowerPlatformSPN| false | The global PowerPlatformSPN | Name of the service Connection for this environment |
 | pool| false | The global pool | Name of the agent pool used for this environment |
 | setAdminModeOnDeploy| false | true | Specifies if the AdminMode is enabled before deploying to an environment |
+| disableBackup | false | false | Indicates if the backup will be skipped while deployment |
 | retentionDays        | false | | Specifies a custom retention time for the stage                                                                |
 
 ### Plugins configuration
@@ -156,3 +158,11 @@ List of variables that can be set
 | BuildTools.EnvironmentUrl | Url of the Dataverse environment (ex: https://myorg.crm.dynamics.com) |
 | SolutionsToIgnore | List (separated by colon ,) of solution unique names we want to ignore in the deployment stage |
 | SolutionsToUpgrade | List (separated by colon ,) of solution unique names we want to install using an upgrade pattern |
+
+### Prerequisites
+
+If you want the Backup and Admin mode behaviors to work you will need to add the Application Id as a PowerPlatform Admin with the Powershell command :
+
+```pwsh
+New-PowerAppManagementApp -ApplicationId $appId
+```
