@@ -80,6 +80,10 @@ parameters:
     type: stepList
     default: []
 
+  - name: timeout
+    type: number
+    default: 60
+
 variables:
   - ${{ if not(eq(parameters.variableGroup, '')) }}:
     - group: '${{ parameters.variableGroup }}'
@@ -281,6 +285,7 @@ stages:
       jobs:
         - deployment: 
           environment: ${{ environment.name }}
+          timeoutInMinutes: ${{ parameters.timeout }}
           variables:
             - group: ${{ environment.variableGroup }}
           ${{ if not(eq(coalesce(environment.pool, ''), '')) }}:
