@@ -110,12 +110,6 @@ stages:
               path: 's/${{ variables.xrmFrameworkPath }}'
   
             - task: PowerShell@2
-              displayName: 'Listing Directory'
-              inputs:
-                targetType: 'inline'
-                script: |
-                  Tree $(Agent.RootDirectory)
-            - task: PowerShell@2
               displayName: 'Creating Connection Strings'
               inputs:
                 targetType: 'filePath'

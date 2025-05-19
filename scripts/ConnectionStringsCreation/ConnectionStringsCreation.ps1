@@ -2,7 +2,7 @@
 param()
 
 . "$PSScriptRoot\PowerAppsAdminUtilities.ps1"
-Import-Module "$PSScriptRoot\ps-modules\VstsTaskSdk\VstsTaskSdk.psm1"
+Import-Module "$PSScriptRoot\ps_modules\VstsTaskSdk\VstsTaskSdk.psm1"
 
 Trace-VstsEnteringInvocation $MyInvocation
 
