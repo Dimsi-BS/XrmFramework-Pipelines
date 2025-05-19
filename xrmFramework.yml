@@ -89,6 +89,10 @@ variables:
     value: 'Any CPU'
   - name: buildConfiguration
     value: 'Release'
+  - name: xrmFrameworkPath
+    value: 'xrmFramework'
+  - name: srcPath
+    value: src
 
 stages:
   - stage: Preparation
@@ -97,11 +101,13 @@ stages:
       - ${{ if not(parameters.skipBuildJob) }}:
         - job: BuildProjects
           steps :
-  
             - checkout: self
               persistCredentials: true
               fetchDepth: 0
               clean: true
+              path: ${{ variables.srcPath }}
+            - checkout: xrmFramework
+              path: ${{ variables.xrmFrameworkPath }}
   
             - task: PowerShell@2
               displayName: 'Listing Directory'
@@ -113,7 +119,7 @@ stages:
               displayName: 'Creating Connection Strings'
               inputs:
                 targetType: 'filePath'
-                filePath: 'scripts/ConnectionStringsCreation/ConnectionStringsCreation.ps1@xrmFramework'
+                filePath: '${{ variables.xrmFrameworkPath }}/scripts/ConnectionStringsCreation/ConnectionStringsCreation.ps1'
                 ${{ if not(eq(parameters.ConfigFolderPath, '')) }}:
                   inputs: >
                     - authenticationType: 'PowerPlatformSPN'
@@ -137,7 +143,7 @@ stages:
                 displayName: Deploying plugin ${{ plugin.name }}
                 inputs:
                   targetType: 'filePath'
-                  filePath: './scripts/DeployPlugins/DeployPlugins.ps1'
+                  filePath: '${{ variables.xrmFrameworkPath }}/scripts/DeployPlugins/DeployPlugins.ps1'
                   inputs: >
                     - authenticationType: 'PowerPlatformSPN'
                     - PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
@@ -151,7 +157,7 @@ stages:
                 displayName: Deploying webresources from ${{ web.name }}
                 inputs:
                   targetType: 'filePath'
-                  filePath: 'scripts/DeployWebResources/DeployWebResources.ps1@xrmFramework'
+                  filePath: '${{ variables.xrmFrameworkPath }}/scripts/DeployWebResources/DeployWebResources.ps1@xrmFramework'
                   inputs: >
                     - authenticationType: 'PowerPlatformSPN'
                     - PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
@@ -321,7 +327,7 @@ stages:
                     - task: PowerShell@2
                       displayName: Setting Environment in Admin Mode
                       targetType: 'filePath'
-                      filePath: './scripts/SetEnvironmentRuntimeState/SetEnvironmentRuntimeState.ps1'
+                      filePath: '${{ variables.xrmFrameworkPath }}/scripts/SetEnvironmentRuntimeState/SetEnvironmentRuntimeState.ps1'
                       inputs: >
                         - authenticationType: 'PowerPlatformSPN'
                         - PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
@@ -423,7 +429,7 @@ stages:
                         - task: PowerShell@2
                           displayName: Opening Environment access
                           targetType: 'filePath'
-                          filePath: './scripts/SetEnvironmentRuntimeState/SetEnvironmentRuntimeState.ps1'
+                          filePath: '${{ variables.xrmFrameworkPath }}/scripts/SetEnvironmentRuntimeState/SetEnvironmentRuntimeState.ps1'
                           inputs: >
                             - authenticationType: 'PowerPlatformSPN'
                             - PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
