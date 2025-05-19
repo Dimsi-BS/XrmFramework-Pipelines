@@ -109,6 +109,7 @@ stages:
             - checkout: xrmFramework
               path: 's/${{ variables.xrmFrameworkPath }}'
   
+            - powershell: Install-Module -Name VstsTaskSdk -RequiredVersion 0.11.0
             - task: PowerShell@2
               displayName: 'Creating Connection Strings'
               inputs:
