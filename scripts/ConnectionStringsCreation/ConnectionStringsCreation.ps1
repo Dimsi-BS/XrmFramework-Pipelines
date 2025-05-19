@@ -4,7 +4,7 @@ param()
 . "$PSScriptRoot\PowerAppsAdminUtilities.ps1"
 Import-Module "$PSScriptRoot\ps_modules\VstsTaskSdk\VstsTaskSdk.psm1"
 
-Trace-EnteringInvocation $MyInvocation
+#Trace-EnteringInvocation $MyInvocation
 
 # Get inputs for the task
 $authenticationType = Get-VstsInput -Name authenticationType -Require
