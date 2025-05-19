@@ -104,6 +104,13 @@ stages:
               clean: true
   
             - task: PowerShell@2
+              displayName: 'Listing Directory'
+              inputs:
+                targetType: 'inline'
+                script: |
+                  Tree $(Agent.RootDirectory)
+            - task: PowerShell@2
+              displayName: 'Creating Connection Strings'
               inputs:
                 targetType: 'filePath'
                 filePath: 'scripts/ConnectionStringsCreation/ConnectionStringsCreation.ps1@xrmFramework'
