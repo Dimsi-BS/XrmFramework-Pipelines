@@ -11,8 +11,10 @@ param(
 )
 
 . "$PSScriptRoot\PowerAppsAdminUtilities.ps1"
+Write-Verbose "Installing module VstsTaskSdk"
 Install-Module -Name VstsTaskSdk -RequiredVersion 0.11.0 -Scope CurrentUser
-Import-VstsTaskSdk
+Write-Verbose "Importing module VstsTaskSdk"
+Import-Module VstsTaskSdk
 
 # Get inputs for the task
 $connectedServiceName = Get-VstsInput -Name $authenticationType -Require
