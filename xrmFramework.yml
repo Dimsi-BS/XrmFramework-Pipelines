@@ -115,13 +115,13 @@ stages:
                 targetType: 'filePath'
                 filePath: '${{ variables.xrmFrameworkPath }}/scripts/ConnectionStringsCreation/ConnectionStringsCreation.ps1'
                 ${{ if not(eq(parameters.ConfigFolderPath, '')) }}:
-                  inputs: >
+                  arguments: >
                     - authenticationType: 'PowerPlatformSPN'
                     - PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
                     - ConnectionStringsConfigPath: ${{ parameters.ConfigFolderPath }}/connectionStrings.json
                     - XrmFrameworkConfigPath: ${{ parameters.ConfigFolderPath }}/xrmFramework.json
                 ${{ else }}:
-                  inputs: >
+                  arguments: >
                     - authenticationType: 'PowerPlatformSPN'
                     - PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
 #                ${{ if not(eq(parameters.ConfigFolderPath, '')) }}:
@@ -138,7 +138,7 @@ stages:
                 inputs:
                   targetType: 'filePath'
                   filePath: '${{ variables.xrmFrameworkPath }}/scripts/DeployPlugins/DeployPlugins.ps1'
-                  inputs: >
+                  arguments: >
                     - authenticationType: 'PowerPlatformSPN'
                     - PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
                     - PluginProjectPath: '${{ plugin.projectPath }}'
@@ -152,7 +152,7 @@ stages:
                 inputs:
                   targetType: 'filePath'
                   filePath: '${{ variables.xrmFrameworkPath }}/scripts/DeployWebResources/DeployWebResources.ps1@xrmFramework'
-                  inputs: >
+                  arguments: >
                     - authenticationType: 'PowerPlatformSPN'
                     - PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
                     - WebresourcesProjectPath: '${{ web.projectPath }}'
@@ -322,7 +322,7 @@ stages:
                       displayName: Setting Environment in Admin Mode
                       targetType: 'filePath'
                       filePath: '${{ variables.xrmFrameworkPath }}/scripts/SetEnvironmentRuntimeState/SetEnvironmentRuntimeState.ps1'
-                      inputs: >
+                      arguments: >
                         - authenticationType: 'PowerPlatformSPN'
                         - PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
                         - runtimeState: 'AdminMode'
@@ -424,7 +424,7 @@ stages:
                           displayName: Opening Environment access
                           targetType: 'filePath'
                           filePath: '${{ variables.xrmFrameworkPath }}/scripts/SetEnvironmentRuntimeState/SetEnvironmentRuntimeState.ps1'
-                          inputs: >
+                          arguments: >
                             - authenticationType: 'PowerPlatformSPN'
                             - PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
                             - runtimeState: 'Enabled'
