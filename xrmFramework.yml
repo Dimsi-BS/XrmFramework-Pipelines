@@ -116,14 +116,14 @@ stages:
                 filePath: '${{ variables.xrmFrameworkPath }}/scripts/ConnectionStringsCreation/ConnectionStringsCreation.ps1'
                 ${{ if not(eq(parameters.ConfigFolderPath, '')) }}:
                   arguments: >
-                    - authenticationType: 'PowerPlatformSPN'
-                    - PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                    - ConnectionStringsConfigPath: ${{ parameters.ConfigFolderPath }}/connectionStrings.json
-                    - XrmFrameworkConfigPath: ${{ parameters.ConfigFolderPath }}/xrmFramework.json
+                    -authenticationType 'PowerPlatformSPN'
+                    -PowerPlatformSPN '${{ parameters.PowerPlatformSPN }}'
+                    -ConnectionStringsConfigPath ${{ parameters.ConfigFolderPath }}/connectionStrings.json
+                    -XrmFrameworkConfigPath ${{ parameters.ConfigFolderPath }}/xrmFramework.json
                 ${{ else }}:
                   arguments: >
-                    - authenticationType: 'PowerPlatformSPN'
-                    - PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                    -authenticationType 'PowerPlatformSPN'
+                    -PowerPlatformSPN '${{ parameters.PowerPlatformSPN }}'
 #                ${{ if not(eq(parameters.ConfigFolderPath, '')) }}:
 #                  - ConnectionStringsConfigPath: ${{ parameters.ConfigFolderPath }}/connectionStrings.json
 #                  - XrmFrameworkConfigPath: ${{ parameters.ConfigFolderPath }}/xrmFramework.json
