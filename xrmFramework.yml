@@ -105,9 +105,9 @@ stages:
               persistCredentials: true
               fetchDepth: 0
               clean: true
-              path: ${{ variables.srcPath }}
+              path: 's/${{ variables.srcPath }}'
             - checkout: xrmFramework
-              path: ${{ variables.xrmFrameworkPath }}
+              path: 's/${{ variables.xrmFrameworkPath }}'
   
             - task: PowerShell@2
               displayName: 'Listing Directory'
