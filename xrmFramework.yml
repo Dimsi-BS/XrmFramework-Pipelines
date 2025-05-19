@@ -106,7 +106,7 @@ stages:
             - task: PowerShell@2
               inputs:
                 targetType: 'filePath'
-                filePath: './scripts/ConnectionStringsCreation/ConnectionStringsCreation.ps1'
+                filePath: 'scripts/ConnectionStringsCreation/ConnectionStringsCreation.ps1@xrmFramework'
                 ${{ if not(eq(parameters.ConfigFolderPath, '')) }}:
                   inputs: >
                     - authenticationType: 'PowerPlatformSPN'
@@ -144,7 +144,7 @@ stages:
                 displayName: Deploying webresources from ${{ web.name }}
                 inputs:
                   targetType: 'filePath'
-                  filePath: './scripts/DeployWebResources/DeployWebResources.ps1'
+                  filePath: 'scripts/DeployWebResources/DeployWebResources.ps1@xrmFramework'
                   inputs: >
                     - authenticationType: 'PowerPlatformSPN'
                     - PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
