@@ -103,48 +103,39 @@ stages:
               fetchDepth: 0
               clean: true
   
-            - task: PowerShell@2
+            - task: XrmFrameworkConnectionStringsCreation@1
               inputs:
-                targetType: 'filePath'
-                filePath: './scripts/ConnectionStringsCreation/ConnectionStringsCreation.ps1'
-                inputs: >
-                  - authenticationType: 'PowerPlatformSPN'
-                  - PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                authenticationType: 'PowerPlatformSPN'
+                PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
                 ${{ if not(eq(parameters.ConfigFolderPath, '')) }}:
-                  - ConnectionStringsConfigPath: ${{ parameters.ConfigFolderPath }}/connectionStrings.json
-                  - XrmFrameworkConfigPath: ${{ parameters.ConfigFolderPath }}/xrmFramework.json
+                  ConnectionStringsConfigPath: ${{ parameters.ConfigFolderPath }}/connectionStrings.json
+                  XrmFrameworkConfigPath: ${{ parameters.ConfigFolderPath }}/xrmFramework.json
        
   
             - script: dotnet build --configuration $(buildConfiguration) ${{ parameters.SolutionFile }}
               displayName: 'dotnet build $(buildConfiguration)'
   
             - ${{ each plugin in parameters.plugins }}:
-              - task: PowerShell@2
+              - task: XrmFrameworkDeployPlugins@1
                 displayName: Deploying plugin ${{ plugin.name }}
                 inputs:
-                  targetType: 'filePath'
-                  filePath: './scripts/DeployPlugins/DeployPlugins.ps1'
-                  inputs: >
-                    - authenticationType: 'PowerPlatformSPN'
-                    - PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                    - PluginProjectPath: '${{ plugin.projectPath }}'
-                    - SolutionName: ${{ plugin.solution }}
+                  authenticationType: 'PowerPlatformSPN'
+                  PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                  PluginProjectPath: '${{ plugin.projectPath }}'
+                  SolutionName: ${{ plugin.solution }}
                   ${{ if not(eq(plugin.deployProjectPath, '')) }}:
-                    - DeployProjectPath: '${{ plugin.deployProjectPath }}'
+                    DeployProjectPath: '${{ plugin.deployProjectPath }}'
   
             - ${{ each web in parameters.webResources }}:
-              - task: PowerShell@2
+              - task: XrmFrameworkDeployWebresources@1
                 displayName: Deploying webresources from ${{ web.name }}
                 inputs:
-                  targetType: 'filePath'
-                  filePath: './scripts/DeployWebResources/DeployWebResources.ps1'
-                  inputs: >
-                    - authenticationType: 'PowerPlatformSPN'
-                    - PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                    - WebresourcesProjectPath: '${{ web.projectPath }}'
-                    - SolutionName: ${{ web.solution }}
+                  authenticationType: 'PowerPlatformSPN'
+                  PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                  WebresourcesProjectPath: '${{ web.projectPath }}'
+                  SolutionName: ${{ web.solution }}
                   ${{ if not(eq(web.deployProjectPath, '')) }}:
-                    - DeployProjectPath: '${{ web.deployProjectPath }}'
+                    DeployProjectPath: '${{ web.deployProjectPath }}'
   
             - ${{ each azureFunction in parameters.azureFunctions }}:
               - task: DotNetCoreCLI@2
@@ -304,14 +295,12 @@ stages:
                       DefaultVersion: true
 
                   - ${{ if or(eq(environment.setAdminModeOnDeploy, ''), eq(environment.setAdminModeOnDeploy, true)) }} :
-                    - task: PowerShell@2
+                    - task: XrmFrameworkEnvironmentRuntimeState@2
                       displayName: Setting Environment in Admin Mode
-                      targetType: 'filePath'
-                      filePath: './scripts/SetEnvironmentRuntimeState/SetEnvironmentRuntimeState.ps1'
-                      inputs: >
-                        - authenticationType: 'PowerPlatformSPN'
-                        - PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
-                        - runtimeState: 'AdminMode'
+                      inputs:
+                        authenticationType: 'PowerPlatformSPN'
+                        PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                        runtimeState: 'AdminMode'
 
                   - ${{ if or(eq(environment.backupEnvironmentOnDeploy, ''), eq(environment.backupEnvironmentOnDeploy, true)) }} :
                     - task: PowerPlatformBackupEnvironment@2
@@ -405,15 +394,13 @@ stages:
               on:
                 success:
                   steps:
-                    - ${{ if or(eq(environment.setAdminModeOnDeploy, ''), eq(environment.setAdminModeOnDeploy, true)) }} :
-                        - task: PowerShell@2
-                          displayName: Opening Environment access
-                          targetType: 'filePath'
-                          filePath: './scripts/SetEnvironmentRuntimeState/SetEnvironmentRuntimeState.ps1'
-                          inputs: >
-                            - authenticationType: 'PowerPlatformSPN'
-                            - PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
-                            - runtimeState: 'Enabled'
+                    - ${{ if or(eq(environment.setAdminModeOnDeploy, ''), environment.setAdminModeOnDeploy) }} :
+                      - task: XrmFrameworkEnvironmentRuntimeState@2
+                        displayName: Opening Environment access
+                        inputs:
+                          authenticationType: 'PowerPlatformSPN'
+                          PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                          runtimeState: 'Enabled'
                           
                     - ${{ if not(eq(environment.retentionDays, '')) }}:
                         - task: PowerShell@2
