@@ -1,17 +1,23 @@
 [CmdletBinding()]
-param()
+param(
+    [Parameter(Mandatory = $true)]
+    $authenticationType,
+    [Parameter(Mandatory = $true)]
+    $PowerPlatformSPN,
+    [Parameter(Mandatory = $false)]
+    $XrmFrameworkConfigPath,
+    [Parameter(Mandatory = $false)]
+    $ConnectionStringsConfigPath    
+)
 
 . "$PSScriptRoot\PowerAppsAdminUtilities.ps1"
-Import-Module "$PSScriptRoot\ps_modules\VstsTaskSdk\VstsTaskSdk.psm1"
+Install-Module -Name VstsTaskSdk -RequiredVersion 0.11.0 -Scope CurrentUser
+Import-VstsTaskSdk
 
 # Get inputs for the task
-$authenticationType = Get-VstsInput -Name authenticationType -Require
 $connectedServiceName = Get-VstsInput -Name $authenticationType -Require
 
-$xrmFrameworkConfigPath = Get-VstsInput -Name XrmFrameworkConfigPath -Require
-$connectionStringsConfigPath = Get-VstsInput -Name ConnectionStringsConfigPath -Require
-
-$endpoint = Get-Endpoint -Name $connectedServiceName -Require
+$endpoint = Get-VstsEndpoint -Name $PowerPlatformSPN -Require
 
 $connectionString = Get-ConnectionString -Endpoint $endpoint -AuthenticationType $authenticationType
 
