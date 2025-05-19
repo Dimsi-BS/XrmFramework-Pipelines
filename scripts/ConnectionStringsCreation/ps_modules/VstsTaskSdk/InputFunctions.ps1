@@ -151,7 +151,7 @@ Default value to use if the input is null or empty.
 .PARAMETER Require
 Writes an error to the error pipeline if the input is null or empty.
 #>
-function Get-Input {
+function Get-VstsInput {
     [CmdletBinding(DefaultParameterSetName = 'Require')]
     param(
         [Parameter(Mandatory = $true)]

@@ -40,7 +40,7 @@ Export-ModuleMember -Function @(
         'Get-Endpoint'
         'Get-SecureFileTicket'
         'Get-SecureFileName'
-        'Get-Input'
+        'Get-VstsInput'
         'Get-TaskVariable'
         'Get-TaskVariableInfo'
         'Set-TaskVariable'
