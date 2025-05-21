@@ -4,16 +4,18 @@ This project is containing the XrmFramework pipeline templates that are used to 
 
 ## Quick start
 
+Install the XrmFramework DevOps Tasks DevOps Extension available [https://marketplace.visualstudio.com/items?itemName=Dimsi.XrmFramework-DevOpsTasks](Here)
+
 Reference the XrmFramework Template
 
 ```yaml
 resources:
   repositories:
     - repository: xrmFramework
-        type: github
-        endpoint: github
-        name: Dimsi-BS/XrmFramework-Pipelines
-        ref: refs/tags/1.0.0
+      type: github
+      endpoint: github
+      name: Dimsi-BS/XrmFramework-Pipelines
+      ref: refs/tags/1.0.0
 
 ```
 
