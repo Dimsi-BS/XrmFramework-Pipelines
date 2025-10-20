@@ -11,6 +11,11 @@ parameters:
     type: string
     default:
 
+  - name: SolutionVersion
+    displayName: SolutionVersion
+    type: string
+    default:
+
   - name: PowerPlatformSPN
     displayName: Service connection to PowerPlatform
     type: string
@@ -174,28 +179,32 @@ stages:
       - job: ExportSolutions
         ${{ if not(parameters.skipBuildJob) }}:
           dependsOn: BuildProjects
-          condition: and(succeeded(), or(eq(variables.disableSolutionExport, ''), eq(variables.disableSolutionExport, false)))
+          condition: and(succeeded(), not(canceled()), or(eq(variables.disableSolutionExport, ''), eq(variables.disableSolutionExport, false)))
         ${{ if parameters.skipBuildJob }}:
-          condition: or(eq(variables.disableSolutionExport, ''), eq(variables.disableSolutionExport, false))
+          condition: or(not(canceled()), eq(variables.disableSolutionExport, ''), eq(variables.disableSolutionExport, false))
         steps:
           - checkout: self
             persistCredentials: true
             fetchDepth: 0
             clean: true
 
-          - ${{ if parameters.installNbgvTool }}:
-            - task: DotNetCoreCLI@2
-              displayName: Install NBGV tool
-              inputs:
-                command: custom
-                custom: tool
-                arguments: install --tool-path . nbgv
+          - ${{ eq(parameters.solutionVersion, '') }}:
+            - ${{ if parameters.installNbgvTool }}:
+              - task: DotNetCoreCLI@2
+                displayName: Install NBGV tool
+                inputs:
+                  command: custom
+                  custom: tool
+                  arguments: install --tool-path . nbgv
+                
+              - pwsh: nbgv cloud -a
+                displayName: Set Build Version
 
-          - pwsh: nbgv cloud -a
-            displayName: Set Build Version
-
-          - pwsh: echo "##vso[task.setvariable variable=solutionVersion;]$(NBGV_SimpleVersion).$(Build.BuildId)"
-            displayName: Set Solutions Version
+              - pwsh: echo "##vso[task.setvariable variable=solutionVersion;]$(NBGV_SimpleVersion).$(Build.BuildId)"
+                displayName: Set Solutions Version
+          - ${{ if ne(parameters.solutionVersion, '') }}:
+            - pwsh: echo "##vso[task.setvariable variable=solutionVersion;]${{ parameters.solutionVersion }}.$(Build.BuildId)"
+              displayName: Set Solutions Version
 
           - pwsh: |
                git config --global user.email "pipeline@azure.com"
@@ -335,7 +344,7 @@ stages:
                   - ${{ each solution in parameters.solutionsImportOrder }}:
                     - task: PowerPlatformImportSolution@2
                       displayName: Installing ${{ solution }}
-                      condition: and(succeeded(), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), not(contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},')))
+                      condition: and(succeeded(), not(canceled()), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), not(contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},')))
                       inputs:
                         authenticationType: 'PowerPlatformSPN'
                         PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
@@ -345,7 +354,7 @@ stages:
 
                     - task: PowerPlatformImportSolution@2
                       displayName: Installing Holding ${{ solution }}
-                      condition: and(succeeded(), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'))
+                      condition: and(succeeded(), not(canceled()), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'))
                       inputs:
                         authenticationType: 'PowerPlatformSPN'
                         PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
@@ -357,7 +366,7 @@ stages:
                   - ${{ each solution in parameters.solutionsImportOrder }}:
                     - task: PowerPlatformApplySolutionUpgrade@2
                       displayName: Applying Upgrade for ${{ solution }}
-                      condition: and(succeeded(), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'))
+                      condition: and(succeeded(), not(canceled()), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'))
                       inputs:
                         authenticationType: 'PowerPlatformSPN'
                         PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
