@@ -188,7 +188,7 @@ stages:
             fetchDepth: 0
             clean: true
 
-          - ${{ eq(parameters.solutionVersion, '') }}:
+          - ${{ if eq(parameters.solutionVersion, '') }}:
             - ${{ if parameters.installNbgvTool }}:
               - task: DotNetCoreCLI@2
                 displayName: Install NBGV tool
