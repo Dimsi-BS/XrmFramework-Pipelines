@@ -34,6 +34,7 @@ Here is the list of all possible template parameters.
 |Parameter | Mandatory | Default value|Description | Usage|
 |---|---|---|---|---|
 | **solutions** | true | | List of solutions of your project | ``` solutions: ```<br/>```- MyTablesSolution ```<br/>```- MyPluginsSolution ```<br/>```- MyWebresourcesSolution ```<br/>```- MyAppsSolution ```<br/>```- MySecurityRolesSolution ```|
+| solutionVersion | false | | Sets the version of the solutions before exporting | ``` solutionVersion: 52.0.1 ```<br/>```Solution version is suffixed by the BuildId of the current build so it needs to be a three parts version number```|
 |**solutionsImportOrder**| true | | The import order that must be applied during deployment <br /> (You can reference the same solution multiple times if needed) |  ``` solutionsImportOrder: ```<br/>```- MySecurityRolesSolution ```<br/>```- MyTablesSolution ```<br/>```- MyPluginsSolution ```<br/>```- MyWebresourcesSolution ```<br/>```- MyAppsSolution ```<br/>```- MySecurityRolesSolution ```|
 | **environments** | true | | Sets the list of deployment environments | see [Environments configuration](#environments-configuration) |
 | **PowerPlatformSPN**| true | | Name of the service Connection to the development environment | ``` PowerPlatformSPN : MyServiceConnection ```|
