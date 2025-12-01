@@ -117,8 +117,8 @@ stages:
                 authenticationType: 'PowerPlatformSPN'
                 PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
                 ${{ if not(eq(parameters.ConfigFolderPath, '')) }}:
-                  ConnectionStringsConfigPath: ${{ parameters.ConfigFolderPath }}/connectionStrings.json
-                  XrmFrameworkConfigPath: ${{ parameters.ConfigFolderPath }}/xrmFramework.json
+                  ConnectionStringsConfigPath: ${{ parameters.ConfigFolderPath }}/connectionStrings.config
+                  XrmFrameworkConfigPath: ${{ parameters.ConfigFolderPath }}/xrmFramework.config
        
   
             - script: dotnet build --configuration $(buildConfiguration) ${{ parameters.SolutionFile }}
