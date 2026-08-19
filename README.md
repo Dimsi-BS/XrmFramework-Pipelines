@@ -117,6 +117,7 @@ Here is an example of the ```webResources``` parameter value
         solution: MyTablesSolution
         projectPath: '$(Build.SourcesDirectory)/MyProject.WebResources'
         deployProjectPath: '$(Build.SourcesDirectory)/Utils/Deploy.MyProject.WebResources'
+        runNpmInstall: true
 ```
 
 The webResource object contains the following properties
@@ -127,6 +128,7 @@ The webResource object contains the following properties
 | **solution** | true | Unique name of the solution where the web resources will be deployed |
 | **projectPath**| true | Path to the csproj file |
 | **deployProjectPath**| true | Path to the XrmFramework Deploy project for this web resource project |
+| runNpmInstall| false | When set to ``true``, ``npm install`` is run in ``projectPath`` before the solution is built (the folder must contain a ``package.json``) |
 
 ### Azure Functions configuration
 

@@ -129,6 +129,14 @@ stages:
                   ${{ pair.key }}: ${{ pair.value }}
        
   
+            - ${{ each web in parameters.webResources }}:
+              - ${{ if eq(web.runNpmInstall, true) }}:
+                - task: Npm@1
+                  displayName: npm install for ${{ web.name }}
+                  inputs:
+                    command: 'install'
+                    workingDir: '${{ web.projectPath }}'
+  
             - script: dotnet build --configuration $(buildConfiguration) ${{ parameters.SolutionFile }}
               displayName: 'dotnet build $(buildConfiguration)'
   
