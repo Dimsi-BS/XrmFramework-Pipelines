@@ -118,6 +118,7 @@ Here is an example of the ```webResources``` parameter value
         projectPath: '$(Build.SourcesDirectory)/MyProject.WebResources'
         deployProjectPath: '$(Build.SourcesDirectory)/Utils/Deploy.MyProject.WebResources'
         runNpmInstall: true
+        deploySourcePath: '$(Build.SourcesDirectory)/MyProject.WebResources/dist'
 ```
 
 The webResource object contains the following properties
@@ -129,6 +130,7 @@ The webResource object contains the following properties
 | **projectPath**| true | Path to the csproj file |
 | **deployProjectPath**| true | Path to the XrmFramework Deploy project for this web resource project |
 | runNpmInstall| false | When set to ``true``, ``npm install`` is run in ``projectPath`` before the solution is built (the folder must contain a ``package.json``) |
+| deploySourcePath| false | When set overrides the place where the resources are searched to be deployed |
 
 ### Azure Functions configuration
 
