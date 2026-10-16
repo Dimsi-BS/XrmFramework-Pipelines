@@ -28,8 +28,18 @@ parameters:
     displayName: Solutions import order
     type: object
 
+  - name: solutionUseSettingFile
+    displayName: Solutions with setting files
+    type: object
+    default: [ ]
+
+  - name: generateSettingsSteps
+    displayName: Custom steps to generate settings files
+    type: stepList
+    default: []
+
   - name: plugins
-    type: object 
+    type: object
     default: []
 
   - name: webResources
@@ -55,6 +65,12 @@ parameters:
   - name: variableGroup
     displayName: Name of the common variable group
     type: string
+    default: ''
+
+  - name: variableGroups
+    displayName: List of common variable groups
+    type: object
+    default: [ ]
 
   - name: installNbgvTool
     displayName: Install NBGV tool to the agent
@@ -64,9 +80,10 @@ parameters:
   - name: environments
     displayName: List of environments
     type: object
-    default: 
+    default:
       - name: UAT
         variableGroup: GoupUAT
+        variableGroups: [ ]
         PowerPlatformSPN:
         pool:
         setAdminModeOnDeploy: true
@@ -93,9 +110,16 @@ parameters:
     type: number
     default: 60
 
+  - name: beforeBuildCustomSteps
+    type: stepList
+    default: []
+
 variables:
-  - ${{ if not(eq(parameters.variableGroup, '')) }}:
-    - group: '${{ parameters.variableGroup }}'
+  - ${{ if ne(coalesce(parameters.variableGroup, ''), '') }}:
+      - group: '${{ parameters.variableGroup }}'
+  - ${{ if gt(length(parameters.variableGroups), 0) }}:
+      - ${{ each groupName in parameters.variableGroups }}:
+          - group: '${{ groupName }}'
   - name: BRANCH_NAME
     value: $[replace(variables['Build.SourceBranch'], 'refs/heads/', '')]
   - name: buildPlatform
@@ -108,89 +132,91 @@ stages:
     displayName: Build and extract
     jobs:
       - ${{ if not(parameters.skipBuildJob) }}:
-        - job: BuildProjects
-          steps :
-  
-            - checkout: self
-              persistCredentials: true
-              fetchDepth: 0
-              clean: true
-  
-            - task: XrmFrameworkConnectionStringsCreation@1
-              inputs:
-                authenticationType: 'PowerPlatformSPN'
-                PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                ${{ if not(eq(parameters.ConfigFolderPath, '')) }}:
+          - job: BuildProjects
+            steps :
+
+              - checkout: self
+                persistCredentials: true
+                fetchDepth: 0
+                clean: true
+
+              - ${{ each step in parameters.beforeBuildCustomSteps }}:
+                  - ${{ step }}
+
+              - task: XrmFrameworkConnectionStringsCreation@1
+                inputs:
+                  authenticationType: 'PowerPlatformSPN'
+                  PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                  ${{ if not(eq(parameters.ConfigFolderPath, '')) }}:
                   ConnectionStringsConfigPath: ${{ parameters.ConfigFolderPath }}/connectionStrings.config
                   XrmFrameworkConfigPath: ${{ parameters.ConfigFolderPath }}/xrmFramework.config
 
-            - ${{ each step in parameters.beforeBuildUsersteps }}:
-              - ${{ each pair in step }}:
-                  ${{ pair.key }}: ${{ pair.value }}
-       
+              - ${{ each step in parameters.beforeBuildUsersteps }}:
+                - ${{ each pair in step }}:
+                    ${{ pair.key }}: ${{ pair.value }}
+
+              - ${{ each web in parameters.webResources }}:
+                - ${{ if eq(web.runNpmInstall, true) }}:
+                  - task: Npm@1
+                    displayName: npm install for ${{ web.name }}
+                    inputs:
+                      command: 'install'
+                      workingDir: '${{ web.projectPath }}'
   
-            - ${{ each web in parameters.webResources }}:
-              - ${{ if eq(web.runNpmInstall, true) }}:
-                - task: Npm@1
-                  displayName: npm install for ${{ web.name }}
-                  inputs:
-                    command: 'install'
-                    workingDir: '${{ web.projectPath }}'
-  
-            - script: dotnet build --configuration $(buildConfiguration) ${{ parameters.SolutionFile }}
-              displayName: 'dotnet build $(buildConfiguration)'
-  
-            - ${{ each plugin in parameters.plugins }}:
-              - task: XrmFrameworkDeployPlugins@1
-                displayName: Deploying plugin ${{ plugin.name }}
-                inputs:
-                  authenticationType: 'PowerPlatformSPN'
-                  PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                  PluginProjectPath: '${{ plugin.projectPath }}'
-                  SolutionName: ${{ plugin.solution }}
-                  ${{ if not(eq(plugin.deployProjectPath, '')) }}:
-                    DeployProjectPath: '${{ plugin.deployProjectPath }}'
-  
-            - ${{ each web in parameters.webResources }}:
-              - task: XrmFrameworkDeployWebresources@1
-                displayName: Deploying webresources from ${{ web.name }}
-                inputs:
-                  authenticationType: 'PowerPlatformSPN'
-                  PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                  WebresourcesProjectPath: '${{ coalesce(web.deploySourcePath, web.projectPath) }}'
-                  SolutionName: ${{ web.solution }}
-                  ${{ if not(eq(web.deployProjectPath, '')) }}:
-                    DeployProjectPath: '${{ web.deployProjectPath }}'
-  
-            - ${{ each azureFunction in parameters.azureFunctions }}:
-              - task: DotNetCoreCLI@2
-                displayName: Publish ${{ azureFunction.name }}
-                inputs:
-                  command: 'publish'
-                  publishWebProjects: false
-                  projects: '${{azureFunction.projectPath}}/${{azureFunction.name}}.csproj'
-                  arguments: '--configuration $(buildConfiguration) --output $(build.artifactstagingdirectory)'
-                  zipAfterPublish: True
-  
-            - ${{ each webApp in parameters.webApplications }}:
-              - task: DotNetCoreCLI@2
-                displayName: Publish ${{ webApp.name }}
-                inputs:
-                  command: 'publish'
-                  publishWebProjects: true
-                  projects: '${{webApp.projectPath}}/${{webApp.name}}.csproj'
-                  arguments: '--configuration $(buildConfiguration) --output $(build.artifactstagingdirectory)'
-                  zipAfterPublish: True
-  
-            - ${{ if not(or(eq(parameters.azureFunctions, ''), eq(length(parameters.azureFunctions), 0))) }}:
-              - publish: $(Build.ArtifactStagingDirectory)
-                artifact: azureFunctions
-                displayName: Publishing artifacts
-  
-            - ${{ if not(or(eq(parameters.webApplications, ''), eq(length(parameters.webApplications), 0))) }}:
-              - publish: $(Build.ArtifactStagingDirectory)
-                artifact: webApplications
-                displayName: Publishing artifacts
+              - script: dotnet build --configuration $(buildConfiguration) ${{ parameters.SolutionFile }}
+                displayName: 'dotnet build $(buildConfiguration)'
+
+              - ${{ each plugin in parameters.plugins }}:
+                  - task: XrmFrameworkDeployPlugins@1
+                    displayName: Deploying plugin ${{ plugin.name }}
+                    inputs:
+                      authenticationType: 'PowerPlatformSPN'
+                      PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                      PluginProjectPath: '${{ plugin.projectPath }}'
+                      SolutionName: ${{ plugin.solution }}
+                      ${{ if not(eq(plugin.deployProjectPath, '')) }}:
+                        DeployProjectPath: '${{ plugin.deployProjectPath }}'
+
+              - ${{ each web in parameters.webResources }}:
+                  - task: XrmFrameworkDeployWebresources@1
+                    displayName: Deploying webresources from ${{ web.name }}
+                    inputs:
+                      authenticationType: 'PowerPlatformSPN'
+                      PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                      WebresourcesProjectPath: '${{ coalesce(web.deploySourcePath, web.projectPath) }}'
+                      SolutionName: ${{ web.solution }}
+                      ${{ if not(eq(web.deployProjectPath, '')) }}:
+                        DeployProjectPath: '${{ web.deployProjectPath }}'
+
+              - ${{ each azureFunction in parameters.azureFunctions }}:
+                  - task: DotNetCoreCLI@2
+                    displayName: Publish ${{ azureFunction.name }}
+                    inputs:
+                      command: 'publish'
+                      publishWebProjects: false
+                      projects: '${{azureFunction.projectPath}}/${{azureFunction.name}}.csproj'
+                      arguments: '--configuration $(buildConfiguration) --output $(build.artifactstagingdirectory)'
+                      zipAfterPublish: True
+
+              - ${{ each webApp in parameters.webApplications }}:
+                  - task: DotNetCoreCLI@2
+                    displayName: Publish ${{ webApp.name }}
+                    inputs:
+                      command: 'publish'
+                      publishWebProjects: true
+                      projects: '${{webApp.projectPath}}/${{webApp.name}}.csproj'
+                      arguments: '--configuration $(buildConfiguration) --output $(build.artifactstagingdirectory)'
+                      zipAfterPublish: True
+
+              - ${{ if not(or(eq(parameters.azureFunctions, ''), eq(length(parameters.azureFunctions), 0))) }}:
+                  - publish: $(Build.ArtifactStagingDirectory)
+                    artifact: azureFunctions
+                    displayName: Publishing artifacts
+
+              - ${{ if not(or(eq(parameters.webApplications, ''), eq(length(parameters.webApplications), 0))) }}:
+                  - publish: $(Build.ArtifactStagingDirectory)
+                    artifact: webApplications
+                    displayName: Publishing artifacts
 
       - job: ExportSolutions
         ${{ if not(parameters.skipBuildJob) }}:
@@ -205,28 +231,28 @@ stages:
             clean: true
 
           - ${{ if eq(parameters.solutionVersion, '') }}:
-            - ${{ if parameters.installNbgvTool }}:
-              - task: DotNetCoreCLI@2
-                displayName: Install NBGV tool
-                inputs:
-                  command: custom
-                  custom: tool
-                  arguments: install --tool-path . nbgv
-                
-              - pwsh: nbgv cloud -a
-                displayName: Set Build Version
+              - ${{ if parameters.installNbgvTool }}:
+                  - task: DotNetCoreCLI@2
+                    displayName: Install NBGV tool
+                    inputs:
+                      command: custom
+                      custom: tool
+                      arguments: install --tool-path . nbgv
 
-              - pwsh: echo "##vso[task.setvariable variable=solutionVersion;]$(NBGV_SimpleVersion).$(Build.BuildId)"
-                displayName: Set Solutions Version
+                  - pwsh: nbgv cloud -a
+                    displayName: Set Build Version
+
+                  - pwsh: echo "##vso[task.setvariable variable=solutionVersion;]$(NBGV_SimpleVersion).$(Build.BuildId)"
+                    displayName: Set Solutions Version
           - ${{ if ne(parameters.solutionVersion, '') }}:
-            - pwsh: echo "##vso[task.setvariable variable=solutionVersion;]${{ parameters.solutionVersion }}.$(Build.BuildId)"
-              displayName: Set Solutions Version
+              - pwsh: echo "##vso[task.setvariable variable=solutionVersion;]${{ parameters.solutionVersion }}.$(Build.BuildId)"
+                displayName: Set Solutions Version
 
           - pwsh: |
-               git config --global user.email "pipeline@azure.com"
-               git config --global user.name "Pipeline Azure"
-               git fetch
-               git checkout $(BRANCH_NAME)
+              git config --global user.email "pipeline@azure.com"
+              git config --global user.name "Pipeline Azure"
+              git fetch
+              git checkout $(BRANCH_NAME)
             displayName: Checking out git repo
 
           - task: PowerPlatformToolInstaller@2
@@ -235,215 +261,241 @@ stages:
               DefaultVersion: true
 
           - ${{ each step in parameters.beforeSolutionExportUsersteps }}:
-            - ${{ each pair in step }}:
-                ${{ pair.key }}: ${{ pair.value }}
+              - ${{ each pair in step }}:
+                  ${{ pair.key }}: ${{ pair.value }}
 
           - ${{ each solution in parameters.solutions }}:
-            - task: PowerPlatformSetSolutionVersion@2
-              displayName: Setting ${{ solution }} version
-              inputs:
-                authenticationType: PowerPlatformSPN
-                PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                SolutionName: ${{ solution }}
-                SolutionVersionNumber: $(solutionVersion)
+              - task: PowerPlatformSetSolutionVersion@2
+                displayName: Setting ${{ solution }} version
+                inputs:
+                  authenticationType: PowerPlatformSPN
+                  PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                  SolutionName: ${{ solution }}
+                  SolutionVersionNumber: $(solutionVersion)
 
-            - task: PowerPlatformExportSolution@2
-              displayName: Exporting Managed ${{ solution }}
-              inputs:
-                authenticationType: 'PowerPlatformSPN'
-                PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                SolutionName: '${{ solution }}'
-                SolutionOutputFile: '$(Build.ArtifactStagingDirectory)/${{ solution }}_managed.zip'
-                Managed: true
-                AsyncOperation: true
-                MaxAsyncWaitTime: '60'
-
-            - ${{ if parameters.extractSolutions  }}:
               - task: PowerPlatformExportSolution@2
-                displayName: Exporting ${{ solution }}
+                displayName: Exporting Managed ${{ solution }}
                 inputs:
                   authenticationType: 'PowerPlatformSPN'
                   PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                  SolutionName: ${{ solution }}
-                  SolutionOutputFile: 'Export/${{ solution }}.zip'
+                  SolutionName: '${{ solution }}'
+                  SolutionOutputFile: '$(Build.ArtifactStagingDirectory)/${{ solution }}_managed.zip'
+                  Managed: true
                   AsyncOperation: true
                   MaxAsyncWaitTime: '60'
-              - task: PowerPlatformUnpackSolution@2
-                displayName: Extracting ${{ solution }}
-                inputs:
-                  SolutionInputFile: 'Export/${{ solution }}.zip'
-                  SolutionTargetFolder: 'Solutions/${{ solution }}'
-                  ProcessCanvasApps: true
+
+              - ${{ if parameters.extractSolutions  }}:
+                  - task: PowerPlatformExportSolution@2
+                    displayName: Exporting ${{ solution }}
+                    inputs:
+                      authenticationType: 'PowerPlatformSPN'
+                      PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                      SolutionName: ${{ solution }}
+                      SolutionOutputFile: 'Export/${{ solution }}.zip'
+                      AsyncOperation: true
+                      MaxAsyncWaitTime: '60'
+                  - task: PowerPlatformUnpackSolution@2
+                    displayName: Extracting ${{ solution }}
+                    inputs:
+                      SolutionInputFile: 'Export/${{ solution }}.zip'
+                      SolutionTargetFolder: 'Solutions/${{ solution }}'
+                      ProcessCanvasApps: true
 
           - ${{ if parameters.extractSolutions  }}:
-            - pwsh: |
-                git add Solutions/*
-                git commit -m "$(Build.BuildNumber)"
-                git push -u origin
-              workingDirectory: $(Build.SourcesDirectory)
-              displayName: Commiting customizations
+              - pwsh: |
+                  git add Solutions/*
+                  git commit -m "$(Build.BuildNumber)"
+                  git push -u origin
+                workingDirectory: $(Build.SourcesDirectory)
+                displayName: Commiting customizations
 
           - publish: $(Build.ArtifactStagingDirectory)
             artifact: solutions
             displayName: Publishing artifacts
 
       - ${{ if not(parameters.disableQualityCheck) }}:
-        - job: QualityChecks
-          dependsOn: ExportSolutions
-          steps:
-            - download: current
-              artifact: solutions
-            - task: PowerPlatformToolInstaller@2
-              displayName: Installing tools
-              inputs:
-                DefaultVersion: true
+          - job: QualityChecks
+            dependsOn: ExportSolutions
+            steps:
+              - download: current
+                artifact: solutions
+              - task: PowerPlatformToolInstaller@2
+                displayName: Installing tools
+                inputs:
+                  DefaultVersion: true
 
-            - task: PowerPlatformChecker@2
-              inputs:
-                authenticationType: 'PowerPlatformSPN'
-                PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                FilesToAnalyze: '$(Pipeline.Workspace)/solutions/*.zip'
-                RuleSet: '0ad12346-e108-40b8-a956-9a8f95ea18c9'
+              - task: PowerPlatformChecker@2
+                inputs:
+                  authenticationType: 'PowerPlatformSPN'
+                  PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                  FilesToAnalyze: '$(Pipeline.Workspace)/solutions/*.zip'
+                  RuleSet: '0ad12346-e108-40b8-a956-9a8f95ea18c9'
 
   - ${{ each environment in parameters.environments }}:
-    - stage: ${{ replace(environment.name, '-', '_') }}
-      jobs:
-        - deployment: 
-          environment: ${{ environment.name }}
-          timeoutInMinutes: ${{ parameters.timeout }}
-          variables:
-            - group: ${{ environment.variableGroup }}
-          ${{ if not(eq(coalesce(environment.pool, ''), '')) }}:
-            pool: ${{ environment.pool }}
-          strategy:
-            runOnce:
-              preDeploy:
-                steps:
-                  - task: PowerPlatformToolInstaller@2
-                    displayName: Installing tools
-                    inputs:
-                      DefaultVersion: true
-
-                  - ${{ if or(eq(environment.setAdminModeOnDeploy, ''), eq(environment.setAdminModeOnDeploy, true)) }} :
-                    - task: XrmFrameworkEnvironmentRuntimeState@2
-                      displayName: Setting Environment in Admin Mode
-                      inputs:
-                        authenticationType: 'PowerPlatformSPN'
-                        PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
-                        runtimeState: 'AdminMode'
-
-                  - ${{ if or(eq(environment.backupEnvironmentOnDeploy, ''), eq(environment.backupEnvironmentOnDeploy, true)) }} :
-                    - task: PowerPlatformBackupEnvironment@2
-                      inputs:
-                        authenticationType: 'PowerPlatformSPN'
-                        PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
-                        BackupLabel: 'Backup before $(Build.BuildNumber)'
-
-              deploy:
-                steps:
-                  - download: current
-                    artifact: solutions
-
-                  - ${{ if not(eq(length(parameters.azureFunctions), 0)) }}:
-                    - download: current
-                      artifact: azureFunctions
-
-                  - ${{ if not(eq(length(parameters.webApplications), 0)) }}:
-                    - download: current
-                      artifact: webApplications
-
-                  - task: PowerPlatformToolInstaller@2
-                    displayName: Installing tools
-                    inputs:
-                      DefaultVersion: true
-
-                  - ${{ each solution in parameters.solutionsImportOrder }}:
-                    - task: PowerPlatformImportSolution@2
-                      displayName: Installing ${{ solution }}
-                      condition: and(succeeded(), not(canceled()), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), not(contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},')))
-                      inputs:
-                        authenticationType: 'PowerPlatformSPN'
-                        PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
-                        SolutionInputFile: '$(Pipeline.Workspace)/solutions/${{ solution }}_managed.zip'
-                        AsyncOperation: true
-                        MaxAsyncWaitTime: '60'
-
-                    - task: PowerPlatformImportSolution@2
-                      displayName: Installing Holding ${{ solution }}
-                      condition: and(succeeded(), not(canceled()), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'))
-                      inputs:
-                        authenticationType: 'PowerPlatformSPN'
-                        PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
-                        SolutionInputFile: '$(Pipeline.Workspace)/solutions/${{ solution }}_managed.zip'
-                        AsyncOperation: true
-                        MaxAsyncWaitTime: '60'
-                        HoldingSolution: true
-
-                  - ${{ each solution in parameters.solutionsImportOrder }}:
-                    - task: PowerPlatformApplySolutionUpgrade@2
-                      displayName: Applying Upgrade for ${{ solution }}
-                      condition: and(succeeded(), not(canceled()), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'))
-                      inputs:
-                        authenticationType: 'PowerPlatformSPN'
-                        PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
-                        SolutionName: '${{ solution }}'
-                        AsyncOperation: true
-                        MaxAsyncWaitTime: '120'
-
-                  - ${{ each azureFunction in parameters.azureFunctions }}:
-                    - ${{ each functionEnv in azureFunction.environments }}:
-                      - ${{ if eq(functionEnv.name, environment.name) }} :
-                        - task: AzureFunctionApp@1
-                          displayName: 'Deploying Function ${{ azureFunction.name }}'
-                          inputs:
-                            azureSubscription: '${{ coalesce(functionEnv.azureSubscription, azureFunction.azureSubscription) }}'
-                            appType: 'functionApp'
-                            appName: '${{ coalesce(functionEnv.appName, azureFunction.appName) }}'
-                            ${{ if not(eq(functionEnv.slotName, '')) }}:
-                              deployToSlotOrASE: true
-                              resourceGroupName: '${{ functionEnv.resourceGroupName }}'
-                              slotName: '${{ functionEnv.slotName }}'
-                            package: '$(Pipeline.Workspace)/azureFunctions/${{ azureFunction.name }}.zip'
-                            deploymentMethod: 'auto'
-
-                  - ${{ each webApp in parameters.webApplications }}:
-                    - ${{ each webAppEnv in webApp.environments }}:
-                      - ${{ if eq(webAppEnv.name, environment.name) }} :
-                        - task: AzureWebApp@1
-                          inputs:
-                            azureSubscription: '${{ coalesce(webAppEnv.azureSubscription, webApp.azureSubscription) }}'
-                            appType: '${{ coalesce(webAppEnv.appType, webApp.appType) }}'
-                            appName: '${{ coalesce(webAppEnv.appName, webApp.appName) }}'
-                            ${{ if not(eq(webAppEnv.slotName, '')) }}:
-                              deployToSlotOrASE: true
-                              resourceGroupName: '${{ webAppEnv.resourceGroupName }}'
-                              slotName: '${{ webAppEnv.slotName }}'
-                            package: '$(Pipeline.Workspace)/webApplications/${{ webApp.name }}.zip'
-                            deploymentMethod: 'auto'
-
-              on:
-                success:
+      - stage: ${{ replace(environment.name, '-', '_') }}
+        jobs:
+          - deployment:
+            environment: ${{ environment.name }}
+            timeoutInMinutes: ${{ parameters.timeout }}
+            variables:
+              - ${{ if ne(coalesce(environment.variableGroup, ''), '') }}:
+                  - group: ${{ environment.variableGroup }}
+              - ${{ if environment.variableGroups }}:
+                  - ${{ each groupName in environment.variableGroups }}:
+                      - group: ${{ groupName }}
+            ${{ if not(eq(coalesce(environment.pool, ''), '')) }}:
+              pool: ${{ environment.pool }}
+            strategy:
+              runOnce:
+                preDeploy:
                   steps:
+                    - task: PowerPlatformToolInstaller@2
+                      displayName: Installing tools
+                      inputs:
+                        DefaultVersion: true
+
                     - ${{ if or(eq(environment.setAdminModeOnDeploy, ''), eq(environment.setAdminModeOnDeploy, true)) }} :
-                      - task: XrmFrameworkEnvironmentRuntimeState@2
-                        displayName: Opening Environment access
-                        inputs:
-                          authenticationType: 'PowerPlatformSPN'
-                          PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
-                          runtimeState: 'Enabled'
-                          
-                    - ${{ if not(eq(environment.retentionDays, '')) }}:
-                        - task: PowerShell@2
-                          condition: and(succeeded(), not(canceled()))
-                          name: RetainOnSuccess
-                          displayName: Retain on Success
+                        - task: XrmFrameworkEnvironmentRuntimeState@2
+                          displayName: Setting Environment in Admin Mode
                           inputs:
-                            failOnStderr: true
-                            targetType: 'inline'
-                            script: |
-                              $contentType = "application/json";
-                              $headers = @{ Authorization = 'Bearer $(System.AccessToken)' };
-                              $rawRequest = @{ daysValid = $(environment.retentionDays); definitionId = $(System.DefinitionId); ownerId = 'User:$(Build.RequestedForId)'; protectPipeline = $false; runId = $(Build.BuildId) };
-                              $request = ConvertTo-Json @($rawRequest);
-                              $uri = "$(System.CollectionUri)$(System.TeamProject)/_apis/build/retention/leases?api-version=6.0-preview.1";
-                              Invoke-RestMethod -uri $uri -method POST -Headers $headers -ContentType $contentType -Body $request;
+                            authenticationType: 'PowerPlatformSPN'
+                            PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                            runtimeState: 'AdminMode'
+
+                    - ${{ if or(eq(environment.backupEnvironmentOnDeploy, ''), eq(environment.backupEnvironmentOnDeploy, true)) }} :
+                        - task: PowerPlatformBackupEnvironment@2
+                          inputs:
+                            authenticationType: 'PowerPlatformSPN'
+                            PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                            BackupLabel: 'Backup before $(Build.BuildNumber)'
+                
+                deploy:
+                  steps:
+                    - download: current
+                      artifact: solutions
+
+                    - ${{ if not(eq(length(parameters.azureFunctions), 0)) }}:
+                        - download: current
+                          artifact: azureFunctions
+                          displayName: Download Azure Functions
+
+                    - ${{ if not(eq(length(parameters.webApplications), 0)) }}:
+                        - download: current
+                          artifact: webApplications
+                          displayName: Download Web Apps
+
+                    - ${{ if not(eq(parameters.solutionSettingsFolderPath, '')) }}:
+                        - download: current
+                          artifact: settings
+                          displayName: Download Settings
+
+                    - task: PowerPlatformToolInstaller@2
+                      displayName: Installing tools
+                      inputs:
+                        DefaultVersion: true
+
+                    - ${{ if not(eq(length(parameters.generateSettingsSteps), 0)) }}:
+                        - ${{ each step in parameters.generateSettingsSteps }}:
+                            - ${{ step }}
+
+                    - ${{ each solution in parameters.solutionsImportOrder }}:
+                        - task: PowerPlatformImportSolution@2
+                          displayName: Installing ${{ solution }}
+                          condition: and(succeeded(), not(canceled()), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), not(contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},')))
+                          inputs:
+                            authenticationType: 'PowerPlatformSPN'
+                            PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                            SolutionInputFile: '$(Pipeline.Workspace)/solutions/${{ solution }}_managed.zip'
+                            AsyncOperation: true
+                            MaxAsyncWaitTime: '60'
+                            ${{ if containsValue(parameters.solutionUseSettingFile, solution) }}:
+                              UseDeploymentSettingsFile: true
+                              DeploymentSettingsFile: '$(Pipeline.Workspace)/settings/${{ solution }}/settings.json'
+                            ${{ else }}:
+                              UseDeploymentSettingsFile: false
+
+                        - task: PowerPlatformImportSolution@2
+                          displayName: Installing Holding ${{ solution }}
+                          condition: and(succeeded(), not(canceled()), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'))
+                          inputs:
+                            authenticationType: 'PowerPlatformSPN'
+                            PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                            SolutionInputFile: '$(Pipeline.Workspace)/solutions/${{ solution }}_managed.zip'
+                            AsyncOperation: true
+                            MaxAsyncWaitTime: '60'
+                            HoldingSolution: true
+                            ${{ if containsValue(parameters.solutionUseSettingFile, solution) }}:
+                              UseDeploymentSettingsFile: true
+                              DeploymentSettingsFile: '$(Pipeline.Workspace)/settings/${{ solution }}/settings.json'
+                            ${{ else }}:
+                              UseDeploymentSettingsFile: false
+
+                    - ${{ each solution in parameters.solutionsImportOrder }}:
+                        - task: PowerPlatformApplySolutionUpgrade@2
+                          displayName: Applying Upgrade for ${{ solution }}
+                          condition: and(succeeded(), not(canceled()), not(contains(format('{0},', variables.SolutionsToIgnore), '${{ solution }},')), contains(format('{0},', variables.SolutionsToUpgrade), '${{ solution }},'))
+                          inputs:
+                            authenticationType: 'PowerPlatformSPN'
+                            PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                            SolutionName: '${{ solution }}'
+                            AsyncOperation: true
+                            MaxAsyncWaitTime: '120'
+
+                    - ${{ each azureFunction in parameters.azureFunctions }}:
+                        - ${{ each functionEnv in azureFunction.environments }}:
+                            - ${{ if eq(functionEnv.name, environment.name) }} :
+                                - task: AzureFunctionApp@1
+                                  displayName: 'Deploying Function ${{ azureFunction.name }}'
+                                  inputs:
+                                    azureSubscription: '${{ coalesce(functionEnv.azureSubscription, azureFunction.azureSubscription) }}'
+                                    appType: 'functionApp'
+                                    appName: '${{ coalesce(functionEnv.appName, azureFunction.appName) }}'
+                                    ${{ if not(eq(functionEnv.slotName, '')) }}:
+                                      deployToSlotOrASE: true
+                                      resourceGroupName: '${{ functionEnv.resourceGroupName }}'
+                                      slotName: '${{ functionEnv.slotName }}'
+                                    package: '$(Pipeline.Workspace)/azureFunctions/${{ azureFunction.name }}.zip'
+                                    deploymentMethod: 'auto'
+
+                    - ${{ each webApp in parameters.webApplications }}:
+                        - ${{ each webAppEnv in webApp.environments }}:
+                            - ${{ if eq(webAppEnv.name, environment.name) }} :
+                                - task: AzureWebApp@1
+                                  inputs:
+                                    azureSubscription: '${{ coalesce(webAppEnv.azureSubscription, webApp.azureSubscription) }}'
+                                    appType: '${{ coalesce(webAppEnv.appType, webApp.appType) }}'
+                                    appName: '${{ coalesce(webAppEnv.appName, webApp.appName) }}'
+                                    ${{ if not(eq(webAppEnv.slotName, '')) }}:
+                                      deployToSlotOrASE: true
+                                      resourceGroupName: '${{ webAppEnv.resourceGroupName }}'
+                                      slotName: '${{ webAppEnv.slotName }}'
+                                    package: '$(Pipeline.Workspace)/webApplications/${{ webApp.name }}.zip'
+                                    deploymentMethod: 'auto'
+                
+                on:
+                  success:
+                    steps:
+                      - ${{ if or(eq(environment.setAdminModeOnDeploy, ''), eq(environment.setAdminModeOnDeploy, true)) }} :
+                          - task: XrmFrameworkEnvironmentRuntimeState@2
+                            displayName: Opening Environment access
+                            inputs:
+                              authenticationType: 'PowerPlatformSPN'
+                              PowerPlatformSPN: '${{ coalesce(environment.PowerPlatformSPN, parameters.PowerPlatformSPN) }}'
+                              runtimeState: 'Enabled'
+
+                      - ${{ if not(eq(environment.retentionDays, '')) }}:
+                          - task: PowerShell@2
+                            condition: and(succeeded(), not(canceled()))
+                            name: RetainOnSuccess
+                            displayName: Retain on Success
+                            inputs:
+                              failOnStderr: true
+                              targetType: 'inline'
+                              script: |
+                                $contentType = "application/json";
+                                $headers = @{ Authorization = 'Bearer $(System.AccessToken)' };
+                                $rawRequest = @{ daysValid = $(environment.retentionDays); definitionId = $(System.DefinitionId); ownerId = 'User:$(Build.RequestedForId)'; protectPipeline = $false; runId = $(Build.BuildId) };
+                                $request = ConvertTo-Json @($rawRequest);
+                                $uri = "$(System.CollectionUri)$(System.TeamProject)/_apis/build/retention/leases?api-version=6.0-preview.1";
+                                Invoke-RestMethod -uri $uri -method POST -Headers $headers -ContentType $contentType -Body $request;
+ 
