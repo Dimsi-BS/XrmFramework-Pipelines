@@ -28,6 +28,16 @@ parameters:
     displayName: Solutions import order
     type: object
 
+  - name: solutionUseSettingFile
+    displayName: Solutions with setting files
+    type: object
+    default: [ ]
+
+  - name: generateSettingsSteps
+    displayName: Custom steps to generate settings files
+    type: stepList
+    default: []
+
   - name: plugins
     type: object 
     default: []
@@ -55,6 +65,12 @@ parameters:
   - name: variableGroup
     displayName: Name of the common variable group
     type: string
+    default: ''
+
+  - name: variableGroups
+    displayName: List of common variable groups
+    type: object
+    default: [ ]
 
   - name: installNbgvTool
     displayName: Install NBGV tool to the agent
@@ -67,6 +83,7 @@ parameters:
     default: 
       - name: UAT
         variableGroup: GoupUAT
+        variableGroups: [ ]
         PowerPlatformSPN:
         pool:
         setAdminModeOnDeploy: true
@@ -93,9 +110,16 @@ parameters:
     type: number
     default: 60
 
+  - name: beforeBuildCustomSteps
+    type: stepList
+    default: []
+
 variables:
-  - ${{ if not(eq(parameters.variableGroup, '')) }}:
-    - group: '${{ parameters.variableGroup }}'
+  - ${{ if ne(coalesce(parameters.variableGroup, ''), '') }}:
+      - group: '${{ parameters.variableGroup }}'
+  - ${{ if gt(length(parameters.variableGroups), 0) }}:
+      - ${{ each groupName in parameters.variableGroups }}:
+          - group: '${{ groupName }}'
   - name: BRANCH_NAME
     value: $[replace(variables['Build.SourceBranch'], 'refs/heads/', '')]
   - name: buildPlatform
@@ -115,7 +139,10 @@ stages:
               persistCredentials: true
               fetchDepth: 0
               clean: true
-  
+              
+            - ${{ each step in parameters.beforeBuildCustomSteps }}:
+                - ${{ step }}
+                    
             - task: XrmFrameworkConnectionStringsCreation@1
               inputs:
                 authenticationType: 'PowerPlatformSPN'
@@ -312,7 +339,11 @@ stages:
           environment: ${{ environment.name }}
           timeoutInMinutes: ${{ parameters.timeout }}
           variables:
-            - group: ${{ environment.variableGroup }}
+            - ${{ if ne(coalesce(environment.variableGroup, ''), '') }}:
+                - group: ${{ environment.variableGroup }}
+            - ${{ if environment.variableGroups }}:
+                - ${{ each groupName in environment.variableGroups }}:
+                    - group: ${{ groupName }}
           ${{ if not(eq(coalesce(environment.pool, ''), '')) }}:
             pool: ${{ environment.pool }}
           strategy:
@@ -351,6 +382,12 @@ stages:
                   - ${{ if not(eq(length(parameters.webApplications), 0)) }}:
                     - download: current
                       artifact: webApplications
+                      displayName: Download Web Apps
+
+                  - ${{ if not(eq(parameters.solutionSettingsFolderPath, '')) }}:
+                      - download: current
+                        artifact: settings
+                        displayName: Download Settings
 
                   - task: PowerPlatformToolInstaller@2
                     displayName: Installing tools
@@ -367,6 +404,11 @@ stages:
                         SolutionInputFile: '$(Pipeline.Workspace)/solutions/${{ solution }}_managed.zip'
                         AsyncOperation: true
                         MaxAsyncWaitTime: '60'
+                        ${{ if containsValue(parameters.solutionUseSettingFile, solution) }}:
+                          UseDeploymentSettingsFile: true
+                          DeploymentSettingsFile: '$(Pipeline.Workspace)/settings/${{ solution }}/settings.json'
+                        ${{ else }}:
+                          UseDeploymentSettingsFile: false
 
                     - task: PowerPlatformImportSolution@2
                       displayName: Installing Holding ${{ solution }}
@@ -378,6 +420,11 @@ stages:
                         AsyncOperation: true
                         MaxAsyncWaitTime: '60'
                         HoldingSolution: true
+                        ${{ if containsValue(parameters.solutionUseSettingFile, solution) }}:
+                          UseDeploymentSettingsFile: true
+                          DeploymentSettingsFile: '$(Pipeline.Workspace)/settings/${{ solution }}/settings.json'
+                        ${{ else }}:
+                          UseDeploymentSettingsFile: false
 
                   - ${{ each solution in parameters.solutionsImportOrder }}:
                     - task: PowerPlatformApplySolutionUpgrade@2
