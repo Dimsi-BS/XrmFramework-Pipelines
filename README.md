@@ -36,18 +36,24 @@ Here is the list of all possible template parameters.
 | **solutions** | true | | List of solutions of your project | ``` solutions: ```<br/>```- MyTablesSolution ```<br/>```- MyPluginsSolution ```<br/>```- MyWebresourcesSolution ```<br/>```- MyAppsSolution ```<br/>```- MySecurityRolesSolution ```|
 | solutionVersion | false | | Sets the version of the solutions before exporting | ``` solutionVersion: 52.0.1 ```<br/>```Solution version is suffixed by the BuildId of the current build so it needs to be a three parts version number```|
 |**solutionsImportOrder**| true | | The import order that must be applied during deployment <br /> (You can reference the same solution multiple times if needed) |  ``` solutionsImportOrder: ```<br/>```- MySecurityRolesSolution ```<br/>```- MyTablesSolution ```<br/>```- MyPluginsSolution ```<br/>```- MyWebresourcesSolution ```<br/>```- MyAppsSolution ```<br/>```- MySecurityRolesSolution ```|
+| solutionUseSettingFile | false | [] | List of solutions that use a deployment settings file during import | ``` solutionUseSettingFile: ```<br/>```- MyTablesSolution ```|
+| generateSettingsSteps | false | [] | Custom steps used to generate deployment settings files | See [Settings files](#settings-files) |
 | **environments** | true | | Sets the list of deployment environments | see [Environments configuration](#environments-configuration) |
 | **PowerPlatformSPN**| true | | Name of the service Connection to the development environment | ``` PowerPlatformSPN : MyServiceConnection ```|
 | plugins | false | [] | Set the list of plugin projects in the solution | see [Plugins configuration](#plugins-configuration) |
 | webResources | false | [] | Set the list of Web Resources projects in the solution | see [WebResources configuration](#webresources-configuration) |
 | azureFunctions | false | [] | Set the list of Azure Functions projects in the solution | see [Azure Functions configuration](#azure-functions-configuration) |
+| webApplications | false | [] | Set the list of web applications to build and deploy | see [Web applications configuration](#web-applications-configuration) |
 |SolutionFile | true (if using plugin deployment) | | Name of the solution file for your XrmFramework project | ``` SolutionFile: MySolution.sln ```|
 |ConfigFolderPath|false| | Path to the folder containing the XrmFramework configuration files | ```ConfigFolderPath`: $(Build.SourcesDirectory)/Config/```|
 | extractSolutions | false | true | Indicates if we want the solutions to be extracted to the source control on build | ``` extractSolutions: false``` |
 | skipBuildJob | false | true | Indicates if we want build job skipped | ``` skipBuildJob: false``` |
 | disableQualityCheck | false | false | Indicates if we want the solutions to be extracted to the source control on build | ``` disableQualityCheck: true``` |
 |variableGroup | false | | Name of the variable group used for the Build phase | see [Variable groups](#variable-groups) |
+| variableGroups | false | [] | List of additional variable groups used for the Build phase | ``` variableGroups: ```<br/>```- My.Common.VariableGroup ```<br/>```- My.Security.VariableGroup ```|
 | installNbgvTool | false | false | Indicates if we want the nbgv tools to be installed by the pipeline (Azure agents have it installed by default) | ``` installNbgvTool: false``` |
+| beforeBuildUsersteps | false | [] | Custom steps executed before the build starts | See [Custom pipeline steps](#custom-pipeline-steps) |
+| beforeSolutionExportUsersteps | false | [] | Custom steps executed before solutions are exported | See [Custom pipeline steps](#custom-pipeline-steps) |
 | timeout | false | 60 | **For paid Azure workers only** Overides the default 60 minutes timeout for a running job  | ``` timeout: 120``` |
 
 ### Environments configuration
@@ -59,6 +65,8 @@ Here is an example of the ```environments``` parameter value
     environments:
       - name: UAT 
         variableGroup: My.UAT.VariableGroup
+        variableGroups:
+          - My.UAT.Shared.VariableGroup
 
       - name: PRODUCTION 
         variableGroup: My.Production.VariableGroup
@@ -79,6 +87,31 @@ The environment object contains the following properties
 | setAdminModeOnDeploy| false | true | Specifies if the AdminMode is enabled before deploying to an environment |
 | backupEnvironmentOnDeploy | false | true | Indicates if the backup will be skipped while deployment |
 | retentionDays        | false | | Specifies a custom retention time for the stage                                                                |
+| variableGroups | false | [] | Additional variable groups to link for this environment |
+
+### Settings files
+
+Solutions listed in `solutionUseSettingFile` are imported with a deployment settings file located at `$(Pipeline.Workspace)/settings/<solution>/settings.json`. Use `generateSettingsSteps` to create these files before deployment.
+
+```yaml
+solutionUseSettingFile:
+  - MyTablesSolution
+
+generateSettingsSteps:
+  - pwsh: ./scripts/generate-settings.ps1
+```
+
+### Custom pipeline steps
+
+Use the step-list parameters to run custom Azure DevOps steps at specific points in the build pipeline.
+
+```yaml
+beforeBuildUsersteps:
+  - script: npm install
+
+beforeSolutionExportUsersteps:
+  - pwsh: ./scripts/prepare-export.ps1
+```
 
 ### Plugins configuration
 
@@ -153,6 +186,24 @@ Here is an example of the ```azureFunctions``` parameter value
             slotName:
           - name: PROD
 ```
+
+### Web applications configuration
+
+When you specify a `webApplications` parameter the template builds and deploys the web application package to the matching environment.
+
+```yaml
+    webApplications:
+      - name: My.WebApp
+        projectPath: '$(Build.SourcesDirectory)/My.WebApp'
+        azureSubscription: 'My Azure Subscription'
+        appType: webApp
+        appName: 'MY-WEB-APP-DEV'
+        environments:
+          - name: UAT
+            appName: 'MY-WEB-APP-UAT'
+```
+
+The web application object supports `name`, `projectPath`, `azureSubscription`, `appType`, `appName`, and environment-specific overrides for `azureSubscription`, `appType`, `appName`, `resourceGroupName`, and `slotName`.
 
 
 ### Variable groups
