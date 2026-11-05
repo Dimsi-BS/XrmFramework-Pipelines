@@ -38,14 +38,49 @@ parameters:
     type: stepList
     default: []
 
+  - name: solutionSettingsFolderPath
+    displayName: Folder where generateSettingsSteps writes the deployment settings files
+    type: string
+    default: ''
+
   - name: plugins
     type: object 
+    default: []
+
+  - name: workflows
+    displayName: List of custom workflow activity projects
+    type: object
     default: []
 
   - name: webResources
     displayName: List of Webresources projects
     type: object
     default: []
+
+  - name: useXrmFrameworkCli
+    displayName: Deploy with the XrmFramework CLI instead of the XrmFramework DevOps tasks
+    type: boolean
+    default: false
+
+  - name: useXrmFrameworkCliForWebresources
+    displayName: Also deploy web resources with the XrmFramework CLI (needs a CLI build where deploy webresources reads the project config)
+    type: boolean
+    default: false
+
+  - name: xrmFrameworkCliVersion
+    displayName: Version of the xrmframework.cli dotnet tool (empty installs the latest)
+    type: string
+    default: ''
+
+  - name: xrmFrameworkCliDotNetVersion
+    displayName: .NET SDK version required by the XrmFramework CLI (empty skips the install)
+    type: string
+    default: '10.0.x'
+
+  - name: projectRoot
+    displayName: Folder containing the Config folder read by the XrmFramework CLI
+    type: string
+    default: '$(Build.SourcesDirectory)'
 
   - name: extractSolutions
     displayName: Do we need to extract solutions to the repository
@@ -151,6 +186,29 @@ stages:
                   ConnectionStringsConfigPath: ${{ parameters.ConfigFolderPath }}/connectionStrings.config
                   XrmFrameworkConfigPath: ${{ parameters.ConfigFolderPath }}/xrmFramework.config
 
+            - ${{ if parameters.useXrmFrameworkCli }}:
+              - ${{ if ne(parameters.xrmFrameworkCliDotNetVersion, '') }}:
+                - task: UseDotNet@2
+                  displayName: Install .NET SDK ${{ parameters.xrmFrameworkCliDotNetVersion }}
+                  inputs:
+                    packageType: 'sdk'
+                    version: '${{ parameters.xrmFrameworkCliDotNetVersion }}'
+
+              - task: DotNetCoreCLI@2
+                displayName: Install XrmFramework CLI
+                inputs:
+                  command: 'custom'
+                  custom: 'tool'
+                  ${{ if ne(parameters.xrmFrameworkCliVersion, '') }}:
+                    arguments: 'install xrmframework.cli --tool-path $(Agent.TempDirectory)/xrmframework-cli --version ${{ parameters.xrmFrameworkCliVersion }}'
+                  ${{ else }}:
+                    arguments: 'install xrmframework.cli --tool-path $(Agent.TempDirectory)/xrmframework-cli'
+
+              - pwsh: |
+                  Write-Host "##vso[task.prependpath]$(Agent.TempDirectory)/xrmframework-cli"
+                  dotnet tool list --tool-path "$(Agent.TempDirectory)/xrmframework-cli"
+                displayName: Add XrmFramework CLI to PATH
+
             - ${{ each step in parameters.beforeBuildUsersteps }}:
               - ${{ each pair in step }}:
                   ${{ pair.key }}: ${{ pair.value }}
@@ -167,27 +225,69 @@ stages:
             - script: dotnet build --configuration $(buildConfiguration) ${{ parameters.SolutionFile }}
               displayName: 'dotnet build $(buildConfiguration)'
   
+            # Plugins, Custom APIs and custom workflow activities all live in a net462/net48
+            # assembly and are deployed by the very same `xrmframework deploy plugins` command:
+            # it instantiates the classes, reads what AddSteps() declares and reconciles the
+            # Dataverse registration records with it.
             - ${{ each plugin in parameters.plugins }}:
-              - task: XrmFrameworkDeployPlugins@1
-                displayName: Deploying plugin ${{ plugin.name }}
-                inputs:
-                  authenticationType: 'PowerPlatformSPN'
-                  PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                  PluginProjectPath: '${{ plugin.projectPath }}'
-                  SolutionName: ${{ plugin.solution }}
-                  ${{ if not(eq(plugin.deployProjectPath, '')) }}:
-                    DeployProjectPath: '${{ plugin.deployProjectPath }}'
-  
+              - ${{ if parameters.useXrmFrameworkCli }}:
+                - pwsh: >
+                    xrmframework deploy plugins
+                    --dll "${{ coalesce(plugin.dllPath, format('{0}/bin/$(buildConfiguration)/{1}/{2}.dll', plugin.projectPath, coalesce(plugin.targetFramework, 'net462'), plugin.name)) }}"
+                    --project "${{ coalesce(plugin.configProjectName, plugin.name) }}"
+                    --project-root "${{ parameters.projectRoot }}"
+                    --noprompt
+                  displayName: Deploying plugin ${{ plugin.name }}
+              - ${{ else }}:
+                - task: XrmFrameworkDeployPlugins@1
+                  displayName: Deploying plugin ${{ plugin.name }}
+                  inputs:
+                    authenticationType: 'PowerPlatformSPN'
+                    PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                    PluginProjectPath: '${{ plugin.projectPath }}'
+                    SolutionName: ${{ plugin.solution }}
+                    ${{ if not(eq(plugin.deployProjectPath, '')) }}:
+                      DeployProjectPath: '${{ plugin.deployProjectPath }}'
+
+            - ${{ each workflow in parameters.workflows }}:
+              - ${{ if parameters.useXrmFrameworkCli }}:
+                - pwsh: >
+                    xrmframework deploy plugins
+                    --dll "${{ coalesce(workflow.dllPath, format('{0}/bin/$(buildConfiguration)/{1}/{2}.dll', workflow.projectPath, coalesce(workflow.targetFramework, 'net462'), workflow.name)) }}"
+                    --project "${{ coalesce(workflow.configProjectName, workflow.name) }}"
+                    --project-root "${{ parameters.projectRoot }}"
+                    --noprompt
+                  displayName: Deploying workflows ${{ workflow.name }}
+              - ${{ else }}:
+                - task: XrmFrameworkDeployPlugins@1
+                  displayName: Deploying workflows ${{ workflow.name }}
+                  inputs:
+                    authenticationType: 'PowerPlatformSPN'
+                    PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                    PluginProjectPath: '${{ workflow.projectPath }}'
+                    SolutionName: ${{ workflow.solution }}
+                    ${{ if not(eq(workflow.deployProjectPath, '')) }}:
+                      DeployProjectPath: '${{ workflow.deployProjectPath }}'
+
             - ${{ each web in parameters.webResources }}:
-              - task: XrmFrameworkDeployWebresources@1
-                displayName: Deploying webresources from ${{ web.name }}
-                inputs:
-                  authenticationType: 'PowerPlatformSPN'
-                  PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
-                  WebresourcesProjectPath: '${{ coalesce(web.deploySourcePath, web.projectPath) }}'
-                  SolutionName: ${{ web.solution }}
-                  ${{ if not(eq(web.deployProjectPath, '')) }}:
-                    DeployProjectPath: '${{ web.deployProjectPath }}'
+              - ${{ if and(parameters.useXrmFrameworkCli, parameters.useXrmFrameworkCliForWebresources) }}:
+                - pwsh: >
+                    xrmframework deploy webresources
+                    --project "${{ coalesce(web.configProjectName, web.name) }}"
+                    --path "${{ coalesce(web.deploySourcePath, web.projectPath) }}"
+                    --project-root "${{ parameters.projectRoot }}"
+                    --noprompt
+                  displayName: Deploying webresources from ${{ web.name }}
+              - ${{ else }}:
+                - task: XrmFrameworkDeployWebresources@1
+                  displayName: Deploying webresources from ${{ web.name }}
+                  inputs:
+                    authenticationType: 'PowerPlatformSPN'
+                    PowerPlatformSPN: '${{ parameters.PowerPlatformSPN }}'
+                    WebresourcesProjectPath: '${{ coalesce(web.deploySourcePath, web.projectPath) }}'
+                    SolutionName: ${{ web.solution }}
+                    ${{ if not(eq(web.deployProjectPath, '')) }}:
+                      DeployProjectPath: '${{ web.deployProjectPath }}'
   
             - ${{ each azureFunction in parameters.azureFunctions }}:
               - task: DotNetCoreCLI@2
@@ -309,6 +409,14 @@ stages:
                 git push -u origin
               workingDirectory: $(Build.SourcesDirectory)
               displayName: Commiting customizations
+
+          - ${{ if not(eq(parameters.solutionSettingsFolderPath, '')) }}:
+            - ${{ each step in parameters.generateSettingsSteps }}:
+              - ${{ step }}
+
+            - publish: ${{ parameters.solutionSettingsFolderPath }}
+              artifact: settings
+              displayName: Publishing deployment settings
 
           - publish: $(Build.ArtifactStagingDirectory)
             artifact: solutions
