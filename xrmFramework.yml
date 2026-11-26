@@ -53,10 +53,13 @@ parameters:
     type: object
     default: []
 
+  # On by default: the CLI is the supported route, and the only one that can authenticate through
+  # Workload Identity federation. Set it to false for the historical route - the scaffolded
+  # Utils/Deploy.* consoles reading a generated connectionStrings.config.
   - name: useXrmFrameworkCli
     displayName: Deploy through the XrmFramework CLI, without a connectionStrings.config
     type: boolean
-    default: false
+    default: true
 
   - name: xrmFrameworkCliVersion
     displayName: Version of the XrmFramework.Cli dotnet tool (empty installs the latest stable)
