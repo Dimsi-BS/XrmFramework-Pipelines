@@ -44,7 +44,7 @@ Here is the list of all possible template parameters.
 | plugins | false | [] | Set the list of plugin, Custom API and custom workflow activity projects in the solution | see [Plugins configuration](#plugins-configuration) |
 | webResources | false | [] | Set the list of Web Resources projects in the solution | see [WebResources configuration](#webresources-configuration) |
 | useXrmFrameworkCli | false | **true** | Deploy through the XrmFramework CLI: adds the `XrmFrameworkCliInstall@1` task and drops `XrmFrameworkConnectionStringsCreation@1`, so no connection string is written onto the agent. Set to `false` for the historical `Utils/Deploy.*` route | see [Deploying with the XrmFramework CLI](#deploying-with-the-xrmframework-cli) |
-| xrmFrameworkCliVersion | false | | Pins the version of the `XrmFramework.Cli` dotnet tool. Empty installs the latest stable | ``` xrmFrameworkCliVersion: 3.1.166 ``` |
+| xrmFrameworkCliVersion | false | | Pins the version of the `XrmFramework.Cli` dotnet tool. Empty installs the latest stable, which is what the default route wants — it requires **3.1.166 or later** | ``` xrmFrameworkCliVersion: 3.1.166 ``` |
 | xrmFrameworkCliDotNetVersion | false | 10.0.x | .NET SDK installed on the agent for the CLI. Set to an empty string to skip the install when the agent already has it | ``` xrmFrameworkCliDotNetVersion: '' ``` |
 | projectRoot | false | $(Build.SourcesDirectory) | Folder containing the `Config` folder that the CLI reads (`Config/xrmFramework.config`) | ``` projectRoot: $(Build.SourcesDirectory)/src ``` |
 | azureFunctions | false | [] | Set the list of Azure Functions projects in the solution | see [Azure Functions configuration](#azure-functions-configuration) |
@@ -205,7 +205,7 @@ The webResource object contains the following properties
 
 ### Deploying with the XrmFramework CLI
 
-The template deploys through the [`xrmframework` CLI](https://www.nuget.org/packages/XrmFramework.Cli) by default: `XrmFrameworkCliInstall@1` installs it as a dotnet tool and prepends it to `PATH`, and no connection string is ever written onto the agent.
+The template deploys through the [`xrmframework` CLI](https://www.nuget.org/packages/XrmFramework.Cli) by default: `XrmFrameworkCliInstall@1` installs it as a dotnet tool and prepends it to `PATH`, and no `Config/connectionStrings.config` is ever written onto the agent — neither the build nor the deployment needs one from XrmFramework 3.1.166 onwards.
 
 `XrmFrameworkDeployPlugins@1` / `XrmFrameworkDeployWebresources@1` are the tasks doing the deployment in both modes. They look for the CLI on `PATH` and, finding it, deploy through it instead of through the scaffolded `Utils/Deploy.*` executable — the template just passes them the extra inputs that route needs (`Project`, `ProjectRoot`, `DllPath`).
 
@@ -221,7 +221,7 @@ Setting `useXrmFrameworkCli: false` goes back to the historical route: `XrmFrame
 
 Both `plugins` and `webResources` go through the CLI — it is all or nothing, since the deployment tasks take their CLI route as soon as the CLI is on `PATH`.
 
-> **Upgrading from 1.2.0 or earlier?** The default changed. The CLI route needs a recent **XrmFramework DevOps Tasks** extension and CLI 3.1.166 or later — see [Requirements](#requirements). Pin `refs/tags/1.2.0`, or pass `useXrmFrameworkCli: false`, to keep deploying the old way.
+> **Upgrading from 1.2.0 or earlier?** The default changed. The CLI route needs **XrmFramework 3.1.166 or later** — the CLI *and* the packages your projects reference — plus a recent **XrmFramework DevOps Tasks** extension; see [Requirements](#requirements). Pin `refs/tags/1.2.0`, or pass `useXrmFrameworkCli: false`, to keep deploying the old way.
 
 ```yaml
 extends:
@@ -275,11 +275,23 @@ As a consequence, on the CLI route the `solution` property of a plugin / webReso
 
 These apply to the default route. `useXrmFrameworkCli: false` needs none of them.
 
+**XrmFramework 3.1.166 or later** — both the CLI and the packages your projects reference. Two separate things need it:
+
+| What | Needs 3.1.166 for | Symptom when older |
+|--|--|--|
+| The `XrmFramework.Cli` dotnet tool | the `--auth` and `--environment` options the deployment tasks pass | the deployment step fails on an unknown option |
+| The `XrmFramework.*` NuGet packages referenced by your projects | building without a `Config/connectionStrings.config` | `dotnet build` fails with **MSB3030** before anything is deployed |
+
+That second one is what lets this route drop `XrmFrameworkConnectionStringsCreation@1` altogether. The file holds credentials, so a generated solution gitignores it and it is absent from any fresh clone and any CI agent; up to 3.1.165 the packages linked it into the project unconditionally, so `CopyToOutputDirectory` failed the build and a pipeline had to invent a connection string it never used. From 3.1.166 that link is conditioned on the file existing, so the solution compiles without it. `App.config` and `Config/xrmFramework.config` are versioned and stay mandatory.
+
+The CLI floor needs nothing set: 3.1.166 is the latest stable release, which the empty `xrmFrameworkCliVersion` default installs.
+
+The rest:
+
 - The **XrmFramework DevOps Tasks** extension has to be recent enough to ship the CLI installer task (`XrmFrameworkCliInstall`) and the deployment tasks that look for the CLI on `PATH` — `XrmFrameworkDeployPlugins` 1.2.0 and `XrmFrameworkDeployWebresources` 1.1.2. An older extension has no installer task and the pipeline fails to compile.
 - The CLI targets .NET 10, so the template installs that SDK with `UseDotNet@2`. Set `xrmFrameworkCliDotNetVersion: ''` to skip the install on a self-hosted agent that already has it.
 - Deployment itself runs on .NET, so it no longer needs .NET Framework or Mono on the agent.
 - Building a net462/net48 plugin project still requires a Windows agent (or the .NET Framework reference assemblies), exactly as before.
-- The deployment tasks pass `--auth` and `--environment`, so the CLI has to be **3.1.166 or later**. That is the latest stable release, which an empty `xrmFrameworkCliVersion` installs, so there is nothing to set.
 
 ### Azure Functions configuration
 

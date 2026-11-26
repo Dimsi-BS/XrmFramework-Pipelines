@@ -179,6 +179,10 @@ stages:
             # application secret otherwise - so no connectionStrings.config is written onto the
             # agent at all, and a federated connection needs no secret anywhere.
             #
+            # Nothing else needs the file either: from XrmFramework 3.1.166 the packages condition
+            # the connectionStrings.config link on the file existing, so `dotnet build` below no
+            # longer fails with MSB3030 over a file that is gitignored and absent from any agent.
+            #
             # Left off, the tasks run the scaffolded Deploy.* executables, which read that file.
             - ${{ if parameters.useXrmFrameworkCli }}:
               - ${{ if ne(parameters.xrmFrameworkCliDotNetVersion, '') }}:
