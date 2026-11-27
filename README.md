@@ -4,7 +4,7 @@ This project is containing the XrmFramework pipeline templates that are used to 
 
 ## Quick start
 
-Install the XrmFramework DevOps Tasks DevOps Extension available [https://marketplace.visualstudio.com/items?itemName=Dimsi.XrmFramework-DevOpsTasks](Here)
+Install the [XrmFramework DevOps Tasks extension](https://marketplace.visualstudio.com/items?itemName=Dimsi.XrmFramework-DevOpsTasks).
 
 Reference the XrmFramework Template
 
@@ -15,9 +15,11 @@ resources:
       type: github
       endpoint: github
       name: Dimsi-BS/XrmFramework-Pipelines
-      ref: refs/tags/1.0.0
+      ref: refs/tags/1.3.0
 
 ```
+
+Always pin a tag. The template's defaults are part of its contract — `1.3.0` deploys through the XrmFramework CLI, `1.2.0` and earlier through the scaffolded `Utils/Deploy.*` consoles — so a floating `ref` would change how your pipeline deploys without you touching it. See [Deploying with the XrmFramework CLI](#deploying-with-the-xrmframework-cli) before moving to `1.3.0`.
 
 ```yaml
 
