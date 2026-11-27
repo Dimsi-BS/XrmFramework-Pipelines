@@ -38,10 +38,15 @@ Here is the list of all possible template parameters.
 |**solutionsImportOrder**| true | | The import order that must be applied during deployment <br /> (You can reference the same solution multiple times if needed) |  ``` solutionsImportOrder: ```<br/>```- MySecurityRolesSolution ```<br/>```- MyTablesSolution ```<br/>```- MyPluginsSolution ```<br/>```- MyWebresourcesSolution ```<br/>```- MyAppsSolution ```<br/>```- MySecurityRolesSolution ```|
 | solutionUseSettingFile | false | [] | List of solutions that use a deployment settings file during import | ``` solutionUseSettingFile: ```<br/>```- MyTablesSolution ```|
 | generateSettingsSteps | false | [] | Custom steps used to generate deployment settings files | See [Settings files](#settings-files) |
+| solutionSettingsFolderPath | false | | Folder written by `generateSettingsSteps` and published as the `settings` artifact | See [Settings files](#settings-files) |
 | **environments** | true | | Sets the list of deployment environments | see [Environments configuration](#environments-configuration) |
 | **PowerPlatformSPN**| true | | Name of the service Connection to the development environment | ``` PowerPlatformSPN : MyServiceConnection ```|
-| plugins | false | [] | Set the list of plugin projects in the solution | see [Plugins configuration](#plugins-configuration) |
+| plugins | false | [] | Set the list of plugin, Custom API and custom workflow activity projects in the solution | see [Plugins configuration](#plugins-configuration) |
 | webResources | false | [] | Set the list of Web Resources projects in the solution | see [WebResources configuration](#webresources-configuration) |
+| useXrmFrameworkCli | false | **true** | Deploy through the XrmFramework CLI: adds the `XrmFrameworkCliInstall@1` task and drops `XrmFrameworkConnectionStringsCreation@1`, so no connection string is written onto the agent. Set to `false` for the historical `Utils/Deploy.*` route | see [Deploying with the XrmFramework CLI](#deploying-with-the-xrmframework-cli) |
+| xrmFrameworkCliVersion | false | | Pins the version of the `XrmFramework.Cli` dotnet tool. Empty installs the latest stable, which is what the default route wants — it requires **3.1.166 or later** | ``` xrmFrameworkCliVersion: 3.1.166 ``` |
+| xrmFrameworkCliDotNetVersion | false | 10.0.x | .NET SDK installed on the agent for the CLI. Set to an empty string to skip the install when the agent already has it | ``` xrmFrameworkCliDotNetVersion: '' ``` |
+| projectRoot | false | $(Build.SourcesDirectory) | Folder containing the `Config` folder that the CLI reads (`Config/xrmFramework.config`) | ``` projectRoot: $(Build.SourcesDirectory)/src ``` |
 | azureFunctions | false | [] | Set the list of Azure Functions projects in the solution | see [Azure Functions configuration](#azure-functions-configuration) |
 | webApplications | false | [] | Set the list of web applications to build and deploy | see [Web applications configuration](#web-applications-configuration) |
 |SolutionFile | true (if using plugin deployment) | | Name of the solution file for your XrmFramework project | ``` SolutionFile: MySolution.sln ```|
@@ -91,15 +96,21 @@ The environment object contains the following properties
 
 ### Settings files
 
-Solutions listed in `solutionUseSettingFile` are imported with a deployment settings file located at `$(Pipeline.Workspace)/settings/<solution>/settings.json`. Use `generateSettingsSteps` to create these files before deployment.
+Solutions listed in `solutionUseSettingFile` are imported with a deployment settings file. Use `generateSettingsSteps` to create those files during the export job, and `solutionSettingsFolderPath` to tell the template which folder to publish as the `settings` artifact.
+
+The custom steps must write one file per solution, laid out as `<solutionSettingsFolderPath>/<solution>/settings.json`, because the deployment stage reads them back from `$(Pipeline.Workspace)/settings/<solution>/settings.json`.
 
 ```yaml
 solutionUseSettingFile:
   - MyTablesSolution
 
+solutionSettingsFolderPath: $(Build.SourcesDirectory)/settings
+
 generateSettingsSteps:
   - pwsh: ./scripts/generate-settings.ps1
 ```
+
+Leaving `solutionSettingsFolderPath` empty skips the whole settings mechanism: `generateSettingsSteps` is not executed, the `settings` artifact is not published, and solutions are imported without a settings file.
 
 ### Custom pipeline steps
 
@@ -117,7 +128,19 @@ beforeSolutionExportUsersteps:
 
 When you specify a ```plugins``` parameter the template will deploy (and register) automatically the latest version of plugins on to the development environment before exporting the solutions.
 
+Plugins, Custom APIs and custom workflow activities all live in the same net462/net48 assembly and are deployed by the same step, so they all go in this one list — there is no separate `workflows` parameter.
+
 Here is an example of the ```plugins``` parameter value
+
+```yaml
+
+    plugins:
+      - name: MyProject.Plugins
+        configProjectName: Plugins
+        projectPath: '$(Build.SourcesDirectory)/MyProject.Plugins'
+```
+
+With `useXrmFrameworkCli: false`, name the target solution and the scaffolded deploy project instead:
 
 ```yaml
 
@@ -133,15 +156,29 @@ The plugin object contains the following properties
 | Name | Mandatory | Description |
 |--|--|--|
 | **name** | true | Name of the csproj file for this plugin project |
-| **solution** | true | Unique name of the solution where the plugin will be deployed |
+| solution | only with `useXrmFrameworkCli: false` | Unique name of the solution where the plugin will be deployed. Unused on the default CLI route, where the target solution comes from `xrmFramework.config` |
 | **projectPath**| true | Path to the csproj file |
-| **deployProjectPath**| true | Path to the XrmFramework Deploy project for this plugin |
+| deployProjectPath | only with `useXrmFrameworkCli: false` | Path to the XrmFramework Deploy project for this plugin. Unused on the default CLI route |
+| configProjectName | false | Project `name` as declared in `xrmFramework.config`. Defaults to `name`. CLI route only |
+| dllPath | false | Explicit path to the built assembly. Left empty, the deployment finds it under `<projectPath>/bin/$(buildConfiguration)`, whichever target framework folder it sits in. CLI route only |
 
 ### WebResources configuration
 
 When you specify a ```webResources``` parameter the template will deploy (and register) automatically the latest version of the webresources on to the development environment before exporting the solutions.
 
 Here is an example of the ```webResources``` parameter value
+
+```yaml
+
+    webResources:
+      - name: MyProject.WebResources
+        configProjectName: WebResources
+        projectPath: '$(Build.SourcesDirectory)/MyProject.WebResources'
+        runNpmInstall: true
+        deploySourcePath: '$(Build.SourcesDirectory)/MyProject.WebResources/dist'
+```
+
+With `useXrmFrameworkCli: false`, name the target solution and the scaffolded deploy project instead:
 
 ```yaml
 
@@ -159,11 +196,102 @@ The webResource object contains the following properties
 | Name | Mandatory | Description |
 |--|--|--|
 | **name** | true | Name of the csproj file for this webresources project |
-| **solution** | true | Unique name of the solution where the web resources will be deployed |
+| solution | only with `useXrmFrameworkCli: false` | Unique name of the solution where the web resources will be deployed. Unused on the default CLI route, where the target solution comes from `xrmFramework.config` |
 | **projectPath**| true | Path to the csproj file |
-| **deployProjectPath**| true | Path to the XrmFramework Deploy project for this web resource project |
+| deployProjectPath | only with `useXrmFrameworkCli: false` | Path to the XrmFramework Deploy project for this web resource project. Unused on the default CLI route |
+| configProjectName | false | Project `name` as declared in `xrmFramework.config`. Defaults to `name`. CLI route only |
 | runNpmInstall| false | When set to ``true``, ``npm install`` is run in ``projectPath`` before the solution is built (the folder must contain a ``package.json``) |
 | deploySourcePath| false | When set overrides the place where the resources are searched to be deployed |
+
+### Deploying with the XrmFramework CLI
+
+The template deploys through the [`xrmframework` CLI](https://www.nuget.org/packages/XrmFramework.Cli) by default: `XrmFrameworkCliInstall@1` installs it as a dotnet tool and prepends it to `PATH`, and no `Config/connectionStrings.config` is ever written onto the agent — neither the build nor the deployment needs one from XrmFramework 3.1.166 onwards.
+
+`XrmFrameworkDeployPlugins@1` / `XrmFrameworkDeployWebresources@1` are the tasks doing the deployment in both modes. They look for the CLI on `PATH` and, finding it, deploy through it instead of through the scaffolded `Utils/Deploy.*` executable — the template just passes them the extra inputs that route needs (`Project`, `ProjectRoot`, `DllPath`).
+
+Setting `useXrmFrameworkCli: false` goes back to the historical route: `XrmFrameworkConnectionStringsCreation@1` writes a `Config/connectionStrings.config` from the `PowerPlatformSPN` service connection, the CLI is not installed, and the tasks run the `Utils/Deploy.*` console projects, which read that file.
+
+| | Default (`true`) | `useXrmFrameworkCli: false` |
+|--|--|--|
+| Connection string on the agent | none | `Config/connectionStrings.config`, written by a task |
+| Deployment engine | `xrmframework deploy plugins` / `deploy webresources` | `Utils/Deploy.*` console projects |
+| `Utils/Deploy.*` projects needed | no | yes |
+| Workload Identity federation | supported, no secret anywhere | not supported |
+| Agent | .NET 10 | .NET Framework / Mono for the deploy consoles |
+
+Both `plugins` and `webResources` go through the CLI — it is all or nothing, since the deployment tasks take their CLI route as soon as the CLI is on `PATH`.
+
+> **Upgrading from 1.2.0 or earlier?** The default changed. The CLI route needs **XrmFramework 3.1.166 or later** — the CLI *and* the packages your projects reference — plus a recent **XrmFramework DevOps Tasks** extension; see [Requirements](#requirements). Pin `refs/tags/1.2.0`, or pass `useXrmFrameworkCli: false`, to keep deploying the old way.
+
+```yaml
+extends:
+  template: xrmFramework.yml@xrmFramework
+  parameters:
+    ConfigFolderPath: $(Build.SourcesDirectory)/Config
+    projectRoot: $(Build.SourcesDirectory)
+
+    # Plugins, Custom APIs and custom workflow activities all go in this one list
+    plugins:
+      - name: MyProject.Plugins
+        configProjectName: Plugins
+        projectPath: '$(Build.SourcesDirectory)/MyProject.Plugins'
+      - name: MyProject.Workflows
+        configProjectName: Workflows
+        projectPath: '$(Build.SourcesDirectory)/MyProject.Workflows'
+
+    webResources:
+      - name: MyProject.WebResources
+        configProjectName: WebResources
+        projectPath: '$(Build.SourcesDirectory)/MyProject.WebResources'
+        runNpmInstall: true
+        deploySourcePath: '$(Build.SourcesDirectory)/MyProject.WebResources/dist'
+```
+
+#### How it authenticates
+
+This is the point of the CLI route. A service connection is handed to a job only when a task in that job declares it as an input, so only a task can obtain an OIDC token for it — which is why the deployment stays inside `XrmFrameworkDeployPlugins@1` rather than becoming a plain `pwsh` step calling the CLI.
+
+The task reads the `PowerPlatformSPN` service connection and hands the result to the CLI through the environment, never the command line:
+
+| Service connection | What the task passes | What you have to store |
+|--|--|--|
+| Workload Identity federation | `--auth wif` + the OIDC token it already fetched | nothing |
+| Service Principal + client secret | `--auth clientsecret` + the secret | the secret, in the service connection |
+| Neither | `--auth connectionstring` | a `Config/connectionStrings.config` — which this route does not write, so set `useXrmFrameworkCli: false` |
+
+A federated service connection is what this route is for: nothing is written to disk, and there is no secret to rotate.
+
+#### What the CLI reads
+
+The CLI takes its target solutions from the project's own configuration rather than from task inputs:
+
+- `--project-root` must point at the folder **containing** a `Config` folder. With the default `ConfigFolderPath: $(Build.SourcesDirectory)/Config`, the default `projectRoot: $(Build.SourcesDirectory)` is already correct.
+- `Config/xrmFramework.config` supplies, for each `<add name="..." targetSolution="..." />` entry, the solution the component is deployed into.
+- the target environment comes from the service connection, not from the configuration.
+
+As a consequence, on the CLI route the `solution` property of a plugin / webResource entry is **not** used — the target solution comes from `xrmFramework.config`. Use `configProjectName` when the project `name` in the pipeline differs from the `name` attribute declared in `xrmFramework.config`.
+
+#### Requirements
+
+These apply to the default route. `useXrmFrameworkCli: false` needs none of them.
+
+**XrmFramework 3.1.166 or later** — both the CLI and the packages your projects reference. Two separate things need it:
+
+| What | Needs 3.1.166 for | Symptom when older |
+|--|--|--|
+| The `XrmFramework.Cli` dotnet tool | the `--auth` and `--environment` options the deployment tasks pass | the deployment step fails on an unknown option |
+| The `XrmFramework.*` NuGet packages referenced by your projects | building without a `Config/connectionStrings.config` | `dotnet build` fails with **MSB3030** before anything is deployed |
+
+That second one is what lets this route drop `XrmFrameworkConnectionStringsCreation@1` altogether. The file holds credentials, so a generated solution gitignores it and it is absent from any fresh clone and any CI agent; up to 3.1.165 the packages linked it into the project unconditionally, so `CopyToOutputDirectory` failed the build and a pipeline had to invent a connection string it never used. From 3.1.166 that link is conditioned on the file existing, so the solution compiles without it. `App.config` and `Config/xrmFramework.config` are versioned and stay mandatory.
+
+The CLI floor needs nothing set: 3.1.166 is the latest stable release, which the empty `xrmFrameworkCliVersion` default installs.
+
+The rest:
+
+- The **XrmFramework DevOps Tasks** extension has to be recent enough to ship the CLI installer task (`XrmFrameworkCliInstall`) and the deployment tasks that look for the CLI on `PATH` — `XrmFrameworkDeployPlugins` 1.2.0 and `XrmFrameworkDeployWebresources` 1.1.2. An older extension has no installer task and the pipeline fails to compile.
+- The CLI targets .NET 10, so the template installs that SDK with `UseDotNet@2`. Set `xrmFrameworkCliDotNetVersion: ''` to skip the install on a self-hosted agent that already has it.
+- Deployment itself runs on .NET, so it no longer needs .NET Framework or Mono on the agent.
+- Building a net462/net48 plugin project still requires a Windows agent (or the .NET Framework reference assemblies), exactly as before.
 
 ### Azure Functions configuration
 
